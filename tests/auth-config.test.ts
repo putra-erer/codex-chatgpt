@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   synchronize: vi.fn(),
-  adapter: vi.fn((_db: unknown, _emails: string, _identity: () => unknown) => ({})),
+  adapter: vi.fn<(db: unknown, emails: string, identity: () => unknown) => Record<string, never>>(() => ({})),
 }));
 vi.mock("@/server/db", () => ({ getDb: () => ({}) }));
 vi.mock("@/server/auth/adapter", () => ({ createPortalAdapter: mocks.adapter }));
@@ -87,7 +87,10 @@ describe("Auth.js request callbacks", () => {
 
   it("routes callbacks through the configured origin for a fresh server approval check", async () => {
     const config = createAuthConfig();
-    await expect(config.callbacks!.redirect!({ url: "https://attacker.test/admin", baseUrl: "https://untrusted.example" }))
-      .resolves.toBe("http://localhost:3000/login");
+    const destination = await config.callbacks!.redirect!({
+      url: "https://attacker.test/admin",
+      baseUrl: "https://untrusted.example",
+    });
+    expect(destination).toBe("http://localhost:3000/login");
   });
 });

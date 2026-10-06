@@ -10,6 +10,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Resolve Auth.js's extensionless Next imports through the test bundler.
+    server: { deps: { inline: ["next-auth"] } },
     include: ["tests/**/*.test.ts"],
     exclude: ["tests/integration/**"],
     restoreMocks: true,

@@ -3,6 +3,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // Accept the loopback Origin observed through Codespaces only in development.
+  experimental:
+    process.env.NODE_ENV === "development" && process.env.CODESPACES === "true"
+      ? { serverActions: { allowedOrigins: ["localhost:3000"] } }
+      : undefined,
   async headers() {
     return [
       {
