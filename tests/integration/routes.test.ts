@@ -204,4 +204,65 @@ describe("production HTTP route authorization", () => {
     expect((await owner.query("SELECT 1 FROM app.sessions WHERE session_token=$1", [fixture.token])).rowCount).toBe(0);
     await expectRedirect("/map", "/login", fixture);
   });
+
+  it("approves a pending account from the admin form as VIEWER and records the authenticated actor", async () => {
+    const admin = await createFixture("APPROVED", "ADMIN");
+    const pending = await createFixture("PENDING", "VIEWER");
+    const html = await (await request("/admin", admin)).text();
+    expect(html).toContain(`${pending.id}@example.test`);
+    const formHtml = [...html.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/g)]
+      .map(([form]) => form).find((form) => form.includes(`data-user-id="${pending.id}"`));
+    expect(formHtml).toBeDefined();
+    const action = formHtml!.match(/name="(\$ACTION_ID_[^"]+)"/);
+    expect(action).not.toBeNull();
+    const form = new FormData();
+    form.set(action![1], "");
+    form.set("userId", pending.id);
+    form.set("page", "1");
+    // Client-supplied role and actor must never influence the approval.
+    form.set("role", "ADMIN");
+    form.set("approvedBy", pending.id);
+    const response = await request("/admin", admin, { method: "POST", headers: { origin: baseUrl }, body: form });
+    expect(response.status).toBe(303);
+    expect(new URL(response.headers.get("location")!, baseUrl).searchParams.get("result")).toBe("approved");
+    const { rows: [updated] } = await owner.query("SELECT status,role,approved_by,approved_at FROM app.users WHERE id=$1", [pending.id]);
+    expect(updated).toMatchObject({ status: "APPROVED", role: "VIEWER", approved_by: admin.id });
+    expect(updated.approved_at).toBeInstanceOf(Date);
+    const { rows: [audit] } = await owner.query("SELECT user_id,action FROM app.audit_logs WHERE target_id=$1", [pending.id]);
+    expect(audit).toEqual({ user_id: admin.id, action: "USER_APPROVED" });
+    expect((await request("/map", pending)).status).toBe(200);
+    await expectRedirect("/admin", "/access-denied", pending);
+    expect(await (await request("/admin", admin)).text()).not.toContain(`data-user-id="${pending.id}"`);
+  });
+
+  it("blocks forged approval requests from viewers, anonymous users, and foreign origins", async () => {
+    const admin = await createFixture("APPROVED", "ADMIN");
+    const viewer = await createFixture("APPROVED", "VIEWER");
+    const target = await createFixture("PENDING", "VIEWER");
+    const html = await (await request("/admin", admin)).text();
+    const formHtml = [...html.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/g)]
+      .map(([form]) => form).find((form) => form.includes(`data-user-id="${target.id}"`));
+    const action = formHtml?.match(/name="(\$ACTION_ID_[^"]+)"/);
+    expect(action).toBeTruthy();
+    const form = new FormData();
+    form.set(action![1], "");
+    form.set("userId", target.id);
+    for (const [actor, destination] of [[viewer, "/access-denied"], [undefined, "/login"]] as const) {
+      const response = await request("/admin", actor, { method: "POST", headers: { origin: baseUrl }, body: form });
+      expect(response.status).toBe(303);
+      expect(new URL(response.headers.get("location")!, baseUrl).pathname).toBe(destination);
+    }
+    const denied = await request("/admin", admin, {
+      method: "POST", headers: { origin: "https://attacker.example" }, body: form,
+    });
+    expect(denied.status).toBe(500);
+    // Even a previously authorized administrator loses mutation access after demotion.
+    await owner.query("UPDATE app.users SET role='VIEWER' WHERE id=$1", [admin.id]);
+    const demoted = await request("/admin", admin, { method: "POST", headers: { origin: baseUrl }, body: form });
+    expect(demoted.status).toBe(303);
+    expect(new URL(demoted.headers.get("location")!, baseUrl).pathname).toBe("/access-denied");
+    const { rows: [untouched] } = await owner.query("SELECT status,role,approved_by FROM app.users WHERE id=$1", [target.id]);
+    expect(untouched).toEqual({ status: "PENDING", role: "VIEWER", approved_by: null });
+    expect((await owner.query("SELECT 1 FROM app.audit_logs WHERE target_id=$1", [target.id])).rowCount).toBe(0);
+  });
 });

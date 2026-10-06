@@ -4,7 +4,7 @@ Status: **fondasi dan authentication Phase 1 sudah diimplementasikan; fitur GIS 
 
 Dokumen ini awalnya dibuat ketika repository masih kosong sebagai rancangan keseluruhan portal GIS internal. Instruksi implementasi berikutnya menetapkan **Phase 1** sebagai Next.js/TypeScript/Tailwind, PostgreSQL/PostGIS, ORM/migration, Docker Compose, Google OAuth, user/status/role, bootstrap `SUPER_ADMIN_EMAILS`, dan protected routes server-side. Scope eksplisit tersebut menggantikan pembagian fondasi/authentication pada roadmap awal.
 
-Implementasi saat ini menyediakan `/login`, `/pending`, `/access-denied`, serta placeholder `/map` dan `/admin`. Petunjuk menjalankan aplikasi dan pengujian ada di [README.md](README.md). MapLibre, upload SHP, raster, layer, worker GIS, dan antarmuka pengelolaan pengguna belum dibuat. Diagram, schema GIS, endpoint, dan acceptance criteria fitur lanjutan di bawah adalah rancangan, bukan pernyataan bahwa fitur tersebut sudah tersedia.
+Implementasi saat ini menyediakan `/login`, `/pending`, `/access-denied`, dan placeholder `/map`. Permintaan lanjutan pengguna menambahkan **Account approvals** di `/admin`: administrator dapat menyetujui akun PENDING sebagai APPROVED/VIEWER melalui browser, dengan pemeriksaan izin server dan audit transaksional. Petunjuk menjalankan aplikasi dan pengujian ada di [README.md](README.md). MapLibre, upload SHP, raster, layer, worker GIS, serta antarmuka penolakan/perubahan role belum dibuat. Diagram, schema GIS, endpoint, dan acceptance criteria fitur lanjutan di bawah adalah rancangan, bukan pernyataan bahwa fitur tersebut sudah tersedia.
 
 ## 1. Analisis kebutuhan dan batas lingkup
 
@@ -531,13 +531,13 @@ README pada fase implementasi wajib menjelaskan local development, semua environ
 
 ## 9. Roadmap implementasi yang direkomendasikan
 
-Implementasi dilakukan bertahap. **Phase 1 yang diminta pengguna menggabungkan fondasi serta authentication/authorization** dan membatasi `/map` serta `/admin` menjadi placeholder. Penomoran 3–7 di bawah dipertahankan sebagai referensi rancangan awal, bukan instruksi untuk memulai fitur lanjutan. Worker dan fitur GIS tidak termasuk implementasi Phase 1.
+Implementasi dilakukan bertahap. **Phase 1 yang diminta pengguna menggabungkan fondasi serta authentication/authorization** dan awalnya membatasi `/map` serta `/admin` menjadi placeholder. Pengguna kemudian meminta fitur persetujuan akun di `/admin`; perluasan ini hanya mencakup approve menjadi VIEWER. Penomoran 3–7 di bawah dipertahankan sebagai referensi rancangan awal, bukan instruksi untuk memulai fitur lanjutan. Worker dan fitur GIS tidak termasuk implementasi ini.
 
 | Fase | Hasil yang dibangun | Kriteria selesai |
 | --- | --- | --- |
 | **0 — Perencanaan awal** | Dokumen arsitektur, schema, folder, roadmap, dan keamanan ini. | Dokumen tersedia; digunakan sebagai rancangan jangka panjang. |
 | **1 — Fondasi dan authentication (scope implementasi pengguna)** | Next.js/TypeScript/Tailwind, config, Compose app/db/migrate, Drizzle migration, PostGIS, Google Auth.js/database session, status/role, bootstrap admin, guard server, halaman status serta placeholder map/admin, README dan test. | Migration baru dan ulang berhasil; role runtime diuji; lint/typecheck/test/build; alur status/role serta akses HTTP server diuji. Login Google nyata tetap diuji di browser dengan credential development. |
-| **2 — Authentication pada penomoran awal** | Authentication dan authorization sudah digabung ke Phase 1 sesuai instruksi pengguna. | Bukan izin untuk memulai phase baru; `/map` dan `/admin` tetap placeholder. |
+| **2 — Authentication pada penomoran awal** | Authentication dan authorization sudah digabung ke Phase 1 sesuai instruksi pengguna. | `/map` tetap placeholder; hanya persetujuan akun di `/admin` ditambahkan atas permintaan lanjutan. |
 | **3 — Administrasi pengguna** | Admin shell/dashboard awal, user list, approve/reject/change role, audit dan tampilan audit dasar. | Viewer gagal memanggil API manual; approval membuka akses; rejection/demotion berlaku pada request berikutnya; concurrent last-admin test lulus. |
 | **4 — Portal peta dan vector pipeline** | MapLibre UI/control/basemap, katalog/legend/search/popup, storage local, job worker, Shapefile import, MVT, metadata/style/visibility/delete layer. | ZIP fixture valid dapat diunggah admin, menjadi layer READY, tampil dan bisa dicari/diklik viewer; hidden/deleted tidak bocor; file berbahaya ditolak. |
 | **5 — Raster pipeline** | GeoTIFF validation, metadata, original storage, bounded XYZ derivation, raster style/legend, authorized tile serving dan cleanup. | GeoTIFF fixture tampil sejajar vector pada koordinat yang benar, metadata lengkap, nodata benar, tile privat, resource limit/failure/retry diuji. |

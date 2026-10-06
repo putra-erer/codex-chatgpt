@@ -184,3 +184,54 @@ form { margin: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
+
+.approval-notice { margin: 0 0 20px; }
+.notice-success { background: #edf7f2; color: #276f5e; border-color: #d5e9df; }
+.approval-panel { background: white; border: 1px solid var(--border); border-radius: 10px; }
+.approval-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 26px; }
+.approval-title { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.approval-title h2 { font-size: 21px; font-weight: 600; }
+.approval-panel-heading .muted { margin-top: 9px; font-size: 12px; }
+.approval-panel-heading form { flex-shrink: 0; }
+.approval-access-note { padding: 12px 26px; border-top: 1px solid #e4efeb; background: #f6faf8; color: #506e65; font-size: 12px; }
+.approval-table { width: 100%; border-collapse: collapse; text-align: left; }
+.approval-table th { padding: 13px 20px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: #fafbfd; color: #758296; font-size: 10px; font-weight: 600; }
+.approval-table td { padding: 20px; vertical-align: middle; border-bottom: 1px solid #edf0f3; font-size: 12px; }
+.approval-table th:first-child, .approval-table td:first-child { padding-left: 26px; }
+.approval-table th:last-child, .approval-table td:last-child { padding-right: 26px; }
+.approval-table tbody tr:last-child td { border-bottom: 0; }
+.approval-account { max-width: 340px; overflow-wrap: anywhere; }
+.approval-account strong, .approval-account > span { display: block; }
+.approval-account strong { font-weight: 600; }
+.approval-account > span { color: var(--muted); font-size: 11px; margin-top: 3px; }
+.approval-date { white-space: nowrap; color: #617084; }
+.approval-action { text-align: right; }
+.approval-submit { min-width: 94px; min-height: 38px; padding: 8px 16px; font-size: 12px; }
+.approval-submit:disabled { cursor: wait; opacity: .65; }
+.approval-list-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 26px; border-top: 1px solid var(--border); }
+.approval-list-footer > .muted { font-size: 11px; }
+.approval-pagination { display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 11px; }
+.approval-empty { border-top: 1px solid var(--border); padding: 47px 24px 51px; text-align: center; }
+.approval-empty .status-icon { margin-bottom: 19px; }
+.approval-empty h3 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.025em; }
+.approval-empty .muted { max-width: 430px; margin: 12px auto 0; font-size: 12px; }
+.approval-mobile-label { display: none; }
+.approval-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+@media (max-width: 760px) {
+  .approval-panel-heading { align-items: flex-start; flex-direction: column; gap: 16px; padding: 22px; }
+  .approval-title h2 { font-size: 20px; }
+  .approval-access-note { padding: 12px 22px; }
+  .approval-table, .approval-table tbody { display: block; }
+  .approval-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .approval-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 22px; border-top: 1px solid var(--border); }
+  .approval-table td, .approval-table td:first-child, .approval-table td:last-child { display: block; border: 0; padding: 0; }
+  .approval-table .approval-account { grid-column: 1 / -1; max-width: none; }
+  .approval-table .approval-account strong { font-size: 13px; }
+  .approval-table .approval-account > span { font-size: 12px; }
+  .approval-mobile-label { display: block; margin-bottom: 4px; color: #8793a2; font-size: 10px; }
+  .approval-action { grid-column: 1 / -1; text-align: left; }
+  .approval-action .approval-submit { width: 100%; min-height: 42px; }
+  .approval-list-footer { padding: 18px 22px; flex-direction: column; align-items: flex-start; }
+  .approval-empty { padding: 36px 22px 40px; }
+}

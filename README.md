@@ -2,7 +2,7 @@
 
 Portal internal dengan login Google, persetujuan akun, dan akses berdasarkan role. Phase 1 mencakup Next.js + TypeScript, Tailwind CSS, PostgreSQL + PostGIS, Drizzle ORM/migration, Docker Compose, serta authentication dan authorization di server.
 
-Halaman `/map` dan `/admin` masih berupa placeholder. MapLibre, layer GIS, upload SHP, raster, worker GIS, dan antarmuka pengelolaan pengguna belum termasuk phase ini. Cakupan Phase 1 mengikuti instruksi implementasi pengguna; penomoran awal di [PLAN.md](PLAN.md) memisahkan authentication menjadi fase tersendiri.
+Halaman `/map` masih berupa placeholder. Sesuai permintaan lanjutan, `/admin` kini menyediakan **Account approvals** untuk menyetujui akun baru sebagai VIEWER melalui browser. MapLibre, layer GIS, upload SHP, raster, worker GIS, serta antarmuka perubahan role dan penolakan akun belum dibuat. Cakupan fondasi mengikuti instruksi Phase 1 pengguna; penomoran awal di [PLAN.md](PLAN.md) memisahkan authentication menjadi fase tersendiri.
 
 ## Menjalankan development
 
@@ -126,9 +126,19 @@ Google memverifikasi identitas, lalu aplikasi membaca akun dan sesi di PostgreSQ
 
 Gunakan dua akun Google: akun admin pertama dan akun kedua untuk pengujian. Akun kedua jangan tercantum dalam `SUPER_ADMIN_EMAILS`. Login dengan akun kedua di profil browser berbeda atau setelah **Sign out**. Login pertama harus menampilkan `/pending` dan pesan **“Your account is waiting for administrator approval.”** Coba juga mengetik `/map` dan `/admin` langsung.
 
-Karena `/admin` masih placeholder, gunakan CLI development di **terminal kedua** untuk mengubah akun uji. Ganti `penguji@example.com` dan `admin@example.com` di setiap perintah dengan email akun nyata yang sudah login Google. Jalankan hanya terhadap database development yang terisolasi. `--approved-by` harus menunjuk akun `APPROVED + ADMIN` yang sudah ada; akses terminal dan credential migration memberikan kewenangan untuk menjalankan perintah ini.
+Untuk menyetujui akun kedua **tanpa terminal**:
 
-Setujui akun kedua sebagai VIEWER:
+1. Login dengan akun ADMIN, lalu buka **Administration → Account approvals**.
+2. Klik **Refresh list** bila akun baru belum terlihat. Daftar menampilkan nama, email, dan tanggal pendaftaran, dengan 20 akun per halaman.
+3. Periksa email akun, kemudian klik **Approve** pada barisnya. Tombol menampilkan **Approving…** selama permintaan berlangsung.
+4. Setelah pesan berhasil muncul, akun tersebut keluar dari daftar pending dan mendapat `APPROVED + VIEWER`.
+5. Pada browser akun kedua, klik **Check approval status** atau muat ulang halaman. `/map` harus terbuka; `/admin` tetap ditolak.
+
+Persetujuan memerlukan sesi ADMIN yang masih aktif dan haknya diperiksa ulang di server saat transaksi. Identitas pemberi persetujuan berasal dari sesi, bukan form browser. Perubahan status dan audit disimpan bersama; klik ulang atau persetujuan bersamaan tidak menggandakan audit. Menu ini hanya menyetujui pengguna baru sebagai VIEWER, tanpa memberikan hak ADMIN. Schema dan migration yang ada sudah mendukung fitur ini.
+
+CLI development tetap tersedia untuk pengujian perubahan role, penolakan, atau reset ke PENDING di **terminal kedua**. Ganti `penguji@example.com` dan `admin@example.com` di setiap perintah dengan email akun nyata yang sudah login Google. Jalankan hanya terhadap database development yang terisolasi. `--approved-by` harus menunjuk akun `APPROVED + ADMIN` yang sudah ada; akses terminal dan credential migration memberikan kewenangan untuk menjalankan perintah ini.
+
+Alternatif CLI untuk menyetujui akun kedua sebagai VIEWER:
 
 ```bash
 ALLOW_DEV_USER_COMMAND=true npm run db:user -- --email penguji@example.com --status APPROVED --role VIEWER --approved-by admin@example.com
@@ -232,6 +242,7 @@ Simpan backup di tempat privat di luar repository karena memuat akun dan sesi. U
 | `src/auth.ts` | Google provider, database session, callback serta konfigurasi Auth.js. |
 | `src/server/auth/` | Identitas Google terverifikasi, adapter database, sinkronisasi akun, bootstrap admin. |
 | `src/server/authorization/` | Kebijakan akses dan guard server untuk user, approved user, dan admin. |
+| `src/server/users/approval.ts`, `src/app/admin/actions.ts` | Daftar pendaftaran pending dan persetujuan VIEWER dengan validasi server serta audit transaksional. |
 | `src/server/db/` | Koneksi PostgreSQL dan schema Drizzle. |
 | `src/server/config/` | Validasi konfigurasi server tanpa mencetak nilai secret. |
 | `src/types/next-auth.d.ts` | Tipe role/status pada sesi dan user Auth.js. |
