@@ -85,6 +85,28 @@ describe("Auth.js request callbacks", () => {
     expect(result.user).toMatchObject({ id: "user-1", role: "VIEWER", status: "REJECTED" });
   });
 
+  it("never exposes the database session token or internal user fields", async () => {
+    const config = createAuthConfig();
+    const expires = new Date("2030-01-01T12:00:00.000Z");
+    const user = {
+      id: "user-1", email: "user@company.com", name: "User", image: null,
+      role: "VIEWER", status: "APPROVED", googleId: "google-123",
+      emailVerified: new Date(), approvedBy: "administrator-id", approvedAt: new Date(),
+    };
+    const result = await config.callbacks!.session!({
+      session: { sessionToken: "private-bearer-token", userId: user.id, expires, user },
+      user,
+    } as unknown as SessionInput);
+    expect(result).toEqual({
+      user: {
+        id: "user-1", email: "user@company.com", name: "User", image: null,
+        role: "VIEWER", status: "APPROVED",
+      },
+      expires: expires.toISOString(),
+    });
+    expect(JSON.stringify(result)).not.toContain("private-bearer-token");
+  });
+
   it("routes callbacks through the configured origin for a fresh server approval check", async () => {
     const config = createAuthConfig();
     const destination = await config.callbacks!.redirect!({

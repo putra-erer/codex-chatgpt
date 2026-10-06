@@ -51,11 +51,20 @@ export function createAuthConfig(): NextAuthConfig {
         }
       },
       async session({ session, user }) {
-        session.user.id = user.id;
         // The adapter joins the live user on every session read. Guards also re-read it.
-        session.user.role = user.role;
-        session.user.status = user.status;
-        return session;
+        // Auth.js supplies the raw database session here, including its bearer token.
+        // Return only the public session fields so /api/auth/session cannot expose it.
+        return {
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            image: user.image,
+            role: user.role,
+            status: user.status,
+          },
+          expires: new Date(session.expires).toISOString(),
+        };
       },
       redirect() {
         // Route through /login so the server reads the current approval status.

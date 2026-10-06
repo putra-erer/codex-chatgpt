@@ -1,8 +1,10 @@
 # Rencana Company GIS Web Portal
 
-Status: **proposal untuk ditinjau; belum ada fitur aplikasi yang diimplementasikan**.
+Status: **fondasi dan authentication Phase 1 sudah diimplementasikan; fitur GIS di dokumen ini masih rancangan fase berikutnya**.
 
-Dokumen ini menindaklanjuti requirement portal GIS internal. Repository saat diperiksa masih kosong dan belum mempunyai commit, kode, dependency, atau database. Hasil tahap ini hanya `PLAN.md`; diagram, SQL, struktur folder, dan endpoint di bawah merupakan rancangan, bukan komponen yang sudah berjalan.
+Dokumen ini awalnya dibuat ketika repository masih kosong sebagai rancangan keseluruhan portal GIS internal. Instruksi implementasi berikutnya menetapkan **Phase 1** sebagai Next.js/TypeScript/Tailwind, PostgreSQL/PostGIS, ORM/migration, Docker Compose, Google OAuth, user/status/role, bootstrap `SUPER_ADMIN_EMAILS`, dan protected routes server-side. Scope eksplisit tersebut menggantikan pembagian fondasi/authentication pada roadmap awal.
+
+Implementasi saat ini menyediakan `/login`, `/pending`, `/access-denied`, serta placeholder `/map` dan `/admin`. Petunjuk menjalankan aplikasi dan pengujian ada di [README.md](README.md). MapLibre, upload SHP, raster, layer, worker GIS, dan antarmuka pengelolaan pengguna belum dibuat. Diagram, schema GIS, endpoint, dan acceptance criteria fitur lanjutan di bawah adalah rancangan, bukan pernyataan bahwa fitur tersebut sudah tersedia.
 
 ## 1. Analisis kebutuhan dan batas lingkup
 
@@ -87,7 +89,7 @@ flowchart LR
 5. Service onboarding pada lifecycle sign-in menyelesaikan sinkronisasi identitas, bootstrap bila berlaku, dan audit `LOGIN` sebelum login dianggap selesai. Kegagalan sinkronisasi tidak memberikan akses GIS. Urutan callback/event adapter ini menjadi integration test fase authentication.
 6. Email Google terverifikasi yang cocok tepat dengan `SUPER_ADMIN_EMAILS` mendapatkan `APPROVED/ADMIN`. Normalisasi daftar menggunakan trim dan lowercase; tidak boleh substring atau wildcard domain.
 7. Session menyimpan referensi user. Server selalu membaca user terbaru saat authorization; status atau role yang dibawa frontend/session bukan sumber otoritas.
-8. `PENDING` diarahkan ke `/pending`, `REJECTED` ke `/rejected`, dan `APPROVED` ke `/map`. Halaman status menyediakan logout dan pemeriksaan status kembali.
+8. `PENDING` diarahkan ke `/pending`, `REJECTED` ke `/access-denied`, dan `APPROVED` ke `/map`. Halaman status menyediakan logout dan pemeriksaan status kembali.
 
 Helper server yang dipakai bersama:
 
@@ -113,7 +115,7 @@ Middleware hanya membantu redirect. Route handlers, server actions jika digunaka
 
 Schema `app` menyimpan data aplikasi. Schema `gis` menyimpan tabel hasil import yang dipublikasikan; `gis_staging` menampung pekerjaan worker dan tidak dapat dibaca role web. Extension PostGIS diaktifkan oleh migration role. UUID dibuat server/database, waktu memakai `timestamptz`, dan audit/metadata tidak berisi credential.
 
-SQL berikut adalah rancangan migration awal **di dalam dokumen**; belum dieksekusi atau dibuat sebagai migration aplikasi.
+SQL berikut adalah rancangan schema lengkap **di dalam dokumen**. Migration executable Phase 1 berada di `migrations/` dan mencakup identitas, sesi, audit, PostGIS, serta izin database; tabel GIS, layer, dan job di rancangan ini belum diimplementasikan. Gunakan file migration untuk menjalankan aplikasi, bukan menyalin SQL rancangan ini ke database.
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS postgis;
@@ -351,7 +353,7 @@ Reverse proxy, parser upload, worker, dan storage quota harus konsisten. Rate li
 
 - `/login`: branding perusahaan dan tombol Google; tampilkan error login tanpa detail sensitif.
 - `/pending`: pesan requirement, pemeriksaan status kembali, dan logout.
-- `/rejected`: penjelasan akses ditolak dan logout, tanpa memaparkan data GIS.
+- `/access-denied`: penjelasan akses ditolak dan logout, tanpa memaparkan data GIS.
 - `/map`: navbar dengan identitas/role, sidebar **Layers / Basemap / Legend**, dan kanvas peta yang dominan. Sidebar dapat dilipat pada layar kecil.
 - Kontrol: zoom, pan, fullscreen, scale, coordinate display lintang/bujur, fit layer extent, toggle layer, popup atribut, dan pencarian.
 - `/admin`: ringkasan user/layer/job dengan navigasi Dashboard, Users, Layers, Upload Data, Audit Log.
@@ -427,7 +429,7 @@ codex-chatgpt/
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx
-│   │   ├── (auth)/{login,pending,rejected}/
+│   │   ├── (auth)/{login,pending,access-denied}/
 │   │   ├── (portal)/map/
 │   │   ├── (admin)/admin/{users,layers,upload,audit}/
 │   │   └── api/{auth,me,layers,users,search,basemaps,admin}/
@@ -529,20 +531,20 @@ README pada fase implementasi wajib menjelaskan local development, semua environ
 
 ## 9. Roadmap implementasi yang direkomendasikan
 
-Implementasi dilakukan bertahap. Setiap fase harus memenuhi kriteria selesai sebelum fase berikutnya; fase fondasi tidak langsung mencakup seluruh fitur portal.
+Implementasi dilakukan bertahap. **Phase 1 yang diminta pengguna menggabungkan fondasi serta authentication/authorization** dan membatasi `/map` serta `/admin` menjadi placeholder. Penomoran 3–7 di bawah dipertahankan sebagai referensi rancangan awal, bukan instruksi untuk memulai fitur lanjutan. Worker dan fitur GIS tidak termasuk implementasi Phase 1.
 
 | Fase | Hasil yang dibangun | Kriteria selesai |
 | --- | --- | --- |
-| **0 — Perencanaan (saat ini)** | Dokumen arsitektur, schema, folder, roadmap, dan keamanan ini. | Dokumen lengkap; menunggu instruksi implementasi berikutnya. |
-| **1 — Fondasi** | Next.js/TypeScript strict/Tailwind, dependency dan image pin, config validation, Compose app/db/worker skeleton, migration schema, logger, README awal. | Fresh database dan migration berhasil; PostGIS aktif; web dapat dibuild dan mengakses DB; role/grant dan storage volume terbukti. Belum mengklaim portal sudah berfungsi. |
-| **2 — Authentication dan authorization** | Google Auth.js, adapter/session, lifecycle identitas, pending/rejected pages, bootstrap admin, guard server, CSRF, audit LOGIN. | Real OAuth login dengan credential development, user baru pending, bootstrap tepat, cookie/logout diuji; semua akses privat fail-closed. |
+| **0 — Perencanaan awal** | Dokumen arsitektur, schema, folder, roadmap, dan keamanan ini. | Dokumen tersedia; digunakan sebagai rancangan jangka panjang. |
+| **1 — Fondasi dan authentication (scope implementasi pengguna)** | Next.js/TypeScript/Tailwind, config, Compose app/db/migrate, Drizzle migration, PostGIS, Google Auth.js/database session, status/role, bootstrap admin, guard server, halaman status serta placeholder map/admin, README dan test. | Migration baru dan ulang berhasil; role runtime diuji; lint/typecheck/test/build; alur status/role serta akses HTTP server diuji. Login Google nyata tetap diuji di browser dengan credential development. |
+| **2 — Authentication pada penomoran awal** | Authentication dan authorization sudah digabung ke Phase 1 sesuai instruksi pengguna. | Bukan izin untuk memulai phase baru; `/map` dan `/admin` tetap placeholder. |
 | **3 — Administrasi pengguna** | Admin shell/dashboard awal, user list, approve/reject/change role, audit dan tampilan audit dasar. | Viewer gagal memanggil API manual; approval membuka akses; rejection/demotion berlaku pada request berikutnya; concurrent last-admin test lulus. |
 | **4 — Portal peta dan vector pipeline** | MapLibre UI/control/basemap, katalog/legend/search/popup, storage local, job worker, Shapefile import, MVT, metadata/style/visibility/delete layer. | ZIP fixture valid dapat diunggah admin, menjadi layer READY, tampil dan bisa dicari/diklik viewer; hidden/deleted tidak bocor; file berbahaya ditolak. |
 | **5 — Raster pipeline** | GeoTIFF validation, metadata, original storage, bounded XYZ derivation, raster style/legend, authorized tile serving dan cleanup. | GeoTIFF fixture tampil sejajar vector pada koordinat yang benar, metadata lengkap, nodata benar, tile privat, resource limit/failure/retry diuji. |
 | **6 — Integrasi dan kesiapan deployment** | Penyempurnaan dashboard/audit, responsive/accessibility, security regression, observability, backup/restore, dokumentasi dan Compose produksi. | End-to-end role × status lulus; build/typecheck/test berhasil; restart job aman; fresh setup dan restore diuji; dependency serta konfigurasi deployment ditinjau. |
 | **7 — Pengembangan opsional** | S3/MinIO adapter, COG + dynamic tiler, GeoJSON upload, trusted PostGIS registration, ACL lebih detail dan optimasi dataset besar. | Dipilih berdasarkan kebutuhan nyata; bukan syarat untuk menganggap fitur MVP pada fase 1–6 lengkap. |
 
-**Rekomendasi tindakan berikutnya:** mulai hanya **Fase 1 — Fondasi** setelah mendapat instruksi. Setelah fondasi tervalidasi, lanjutkan authentication/RBAC sebelum menerima unggahan atau membuka data GIS.
+**Batas pekerjaan saat ini:** lengkapi dan verifikasi hanya Phase 1 sesuai scope eksplisit pengguna. Jangan memulai Phase 2 atau fitur GIS berikutnya tanpa instruksi baru. Hasil check dilaporkan berdasarkan eksekusi aktual, bukan keberadaan file test saja.
 
 ## 10. Strategi pengujian dan acceptance criteria
 
@@ -576,5 +578,5 @@ Pemeriksaan yang hanya menghasilkan PID/open port, nol test, atau build UI tidak
 - Perencanaan tidak memerlukan secret. Saat fase OAuth dimulai, diperlukan Google OAuth client yang sah, origin/callback yang terdaftar, `AUTH_SECRET`, dan email admin awal. Periksa binding yang sudah tersedia sebelum meminta konfigurasi tambahan; jangan meminta nilai secret di chat.
 - Provider basemap, kapasitas dataset terbesar, jenis raster dominan, origin produksi, retensi data, dan kebijakan internal Google perlu ditetapkan sebelum deployment. Default teknis di atas memungkinkan fondasi berjalan tanpa menunggu preferensi tersebut.
 - Default vector/raster belum diuji terhadap data perusahaan. Strategi tile raster praproses sengaja dibatasi; dataset besar mungkin memerlukan fase COG/dynamic tiler sebelum layak digunakan.
-- Pada tahap ini tidak dibuat fitur, dependency, migration executable, credential, service, atau deployment. Belum ada klaim build/test/runtime berhasil.
-- Setelah `PLAN.md` selesai, pekerjaan berhenti pada tahap perencanaan dan menunggu instruksi berikutnya, sesuai permintaan.
+- Fondasi, authentication, protected routes, dan migration executable Phase 1 kini tersedia; [README.md](README.md) menjelaskan setup serta cara memverifikasinya. Ketersediaan kode tidak otomatis menyatakan seluruh acceptance criteria GIS pada dokumen ini sudah terpenuhi.
+- Pekerjaan dibatasi pada Phase 1 yang diminta pengguna. Fitur GIS dan administrasi lengkap tetap menunggu instruksi berikutnya.

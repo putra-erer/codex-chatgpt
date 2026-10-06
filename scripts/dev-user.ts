@@ -40,9 +40,9 @@ async function main() {
       if (Number(count) <= 1) throw new Error("Cannot remove the last approved administrator.");
     }
     await client.query(
-      `UPDATE app.users SET status=$1, role=$2,
-       approved_by=CASE WHEN $1='APPROVED' THEN $3::uuid ELSE NULL END,
-       approved_at=CASE WHEN $1='APPROVED' THEN COALESCE(approved_at,now()) ELSE NULL END,
+      `UPDATE app.users SET status=$1::app.user_status, role=$2::app.user_role,
+       approved_by=CASE WHEN $1::app.user_status='APPROVED' THEN $3::uuid ELSE NULL END,
+       approved_at=CASE WHEN $1::app.user_status='APPROVED' THEN COALESCE(approved_at,now()) ELSE NULL END,
        updated_at=now() WHERE id=$4`,
       [options.status, options.role, actor.id, user.id],
     );
