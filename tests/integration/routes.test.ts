@@ -1,7 +1,9 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { VectorTile } from "@mapbox/vector-tile";
+import { PbfReader } from "pbf";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -48,7 +50,7 @@ async function expectRedirect(path: string, destination: string, fixture?: Fixtu
   expect(new URL(response.headers.get("location")!, baseUrl).pathname).toBe(destination);
   const body = await response.text();
   expect(body).not.toContain("Your administrator access is active.");
-  expect(body).not.toContain("A place for your spatial workspace.");
+  expect(body).not.toContain("<h1>GIS Viewer</h1>");
 }
 
 beforeAll(async () => {
@@ -143,7 +145,7 @@ describe("production HTTP route authorization", () => {
     expect(response.headers.get("cache-control")).toContain("private");
     expect(response.headers.get("cache-control")).toContain("no-store");
     const body = await response.text();
-    expect(body).toContain("A place for your spatial workspace.");
+    expect(body).toContain("GIS Viewer");
     expect(body).not.toContain('href="/admin"');
     await expectRedirect("/admin", "/access-denied", fixture);
   });
@@ -330,5 +332,78 @@ describe("approved account and presence APIs", () => {
     expect((await account()).online).toBe(false);
     await owner.query("DELETE FROM app.sessions WHERE session_token=$1", [viewer.token]);
     expect((await owner.query("SELECT 1 FROM app.user_presence WHERE session_token=$1", [viewer.token])).rowCount).toBe(0);
+  });
+});
+
+
+describe("GIS viewer data authorization", () => {
+  const layerId = "33333333-3333-4333-8333-333333333333";
+  const tilePath = `/api/layers/${layerId}/tiles/12/3263/2118.pbf`;
+  beforeAll(async () => {
+    // Other authentication suites truncate app.users CASCADE, including layer metadata.
+    // Restore only the migration's synthetic registry rows in this isolated database.
+    const statements = readFileSync(resolve("migrations/0003_gis_viewer.sql"),"utf8").split("--> statement-breakpoint");
+    for(const statement of statements) if(statement.trim().startsWith("INSERT INTO app.layers")) {
+      await owner.query(statement.trim().replace(/;$/, " ON CONFLICT (id) DO NOTHING;"));
+    }
+  });
+  it("rejects every GIS endpoint for anonymous, pending and rejected accounts", async()=>{
+    for(const path of ["/api/layers",`/api/layers/${layerId}`,tilePath,"/api/basemaps"]) {
+      expect((await request(path)).status).toBe(401);
+      for(const status of ["PENDING","REJECTED"] as const) {
+        expect((await request(path,await createFixture(status,"ADMIN"))).status).toBe(403);
+      }
+    }
+  });
+  it("serves a safe catalog and real vector tiles to approved viewers", async()=>{
+    const viewer=await createFixture("APPROVED","VIEWER");
+    const response=await request("/api/layers",viewer);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    const {layers}=await response.json();
+    expect(layers).toHaveLength(3);
+    for(const layer of layers) {
+      expect(layer.demo).toBe(true);
+      expect(layer.bounds).toHaveLength(4);
+      expect(layer).not.toHaveProperty("tableName");expect(layer).not.toHaveProperty("filePath");expect(layer).not.toHaveProperty("storageMetadata");
+    }
+    const lon=106.827,lat=-6.180,z=12;
+    const x=Math.floor((lon+180)/360*2**z);
+    const y=Math.floor((1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*2**z);
+    const tile=await request(`/api/layers/${layerId}/tiles/${z}/${x}/${y}.pbf`,viewer);
+    expect(tile.status).toBe(200);expect(tile.headers.get("content-type")).toContain("vector-tile");
+    const decoded=new VectorTile(new PbfReader(await tile.arrayBuffer()));
+    expect(decoded.layers.features.length).toBeGreaterThan(0);
+    expect(decoded.layers.features.feature(0).properties).toHaveProperty("name");
+    expect((await request("/api/basemaps",viewer)).status).toBe(200);
+  });
+  it("enforces global visibility and READY state on direct metadata and tile requests", async()=>{
+    const viewer=await createFixture("APPROVED","VIEWER");
+    const admin=await createFixture("APPROVED","ADMIN");
+    try {
+      await owner.query("UPDATE app.layers SET is_visible=false WHERE id=$1",[layerId]);
+      expect((await (await request("/api/layers",viewer)).json()).layers).toHaveLength(2);
+      for(const path of [`/api/layers/${layerId}`,tilePath]) expect((await request(path,viewer)).status).toBe(404);
+      expect((await request(`/api/layers/${layerId}`,admin)).status).toBe(200);
+      await owner.query("UPDATE app.layers SET state='FAILED' WHERE id=$1",[layerId]);
+      for(const actor of [viewer,admin]) expect((await request(tilePath,actor)).status).toBe(404);
+    } finally {await owner.query("UPDATE app.layers SET state='READY',is_visible=true WHERE id=$1",[layerId]);}
+  });
+  it("validates ids and tile ranges and rechecks revoked access", async()=>{
+    const viewer=await createFixture("APPROVED","VIEWER");
+    expect((await request("/api/layers/not-a-uuid",viewer)).status).toBe(404);
+    for(const path of ["23/0/0.pbf","2/4/0.pbf","2/0/4.pbf","-1/0/0.pbf","1/abc/0.pbf"]) {
+      expect((await request(`/api/layers/${layerId}/tiles/${path}`,viewer)).status).toBe(400);
+    }
+    await owner.query("UPDATE app.users SET status='REJECTED',approved_at=NULL WHERE id=$1",[viewer.id]);
+    expect((await request(tilePath,viewer)).status).toBe(403);
+  });
+  it("keeps runtime database access read-only for layer metadata and geometry", async()=>{
+    const runtime=new Pool({connectionString:process.env.DATABASE_URL});
+    try {
+      await expect(runtime.query("DELETE FROM app.layers WHERE id=$1",[layerId])).rejects.toMatchObject({code:"42501"});
+      await expect(runtime.query("DELETE FROM gis.layer_33333333333343338333333333333333")).rejects.toMatchObject({code:"42501"});
+      await expect(runtime.query("CREATE TABLE gis.forbidden(id integer)")).rejects.toMatchObject({code:"42501"});
+    } finally {await runtime.end();}
   });
 });

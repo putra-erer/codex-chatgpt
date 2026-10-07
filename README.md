@@ -1,8 +1,8 @@
-# Company GIS Portal — Phase 1
+# Company GIS Portal — Phase 1 & GIS Viewer
 
 Portal internal dengan login Google, persetujuan akun, dan akses berdasarkan role. Phase 1 mencakup Next.js + TypeScript, Tailwind CSS, PostgreSQL + PostGIS, Drizzle ORM/migration, Docker Compose, serta authentication dan authorization di server.
 
-Halaman `/map` masih berupa placeholder. Sesuai permintaan lanjutan, `/admin` kini menyediakan **Account approvals** untuk menyetujui akun baru sebagai VIEWER melalui browser, serta **Approved accounts** untuk melihat akun yang telah disetujui dan status online/offline. MapLibre, layer GIS, upload SHP, raster, worker GIS, serta antarmuka perubahan role dan penolakan akun belum dibuat. Cakupan fondasi mengikuti instruksi Phase 1 pengguna; penomoran awal di [PLAN.md](PLAN.md) memisahkan authentication menjadi fase tersendiri.
+Phase 2 **GIS Viewer** kini tersedia di `/map` menggunakan MapLibre GL JS, vector tile PostGIS, panel layer/basemap/legenda, popup atribut, dan pengukuran. Sesuai permintaan lanjutan, `/admin` kini menyediakan **Account approvals** untuk menyetujui akun baru sebagai VIEWER melalui browser, serta **Approved accounts** untuk melihat akun yang telah disetujui dan status online/offline. Upload SHP/raster, worker GIS, serta antarmuka perubahan role dan penolakan akun belum dibuat. Cakupan fondasi mengikuti instruksi Phase 1 pengguna; penomoran awal di [PLAN.md](PLAN.md) memisahkan authentication menjadi fase tersendiri.
 
 ## Menjalankan development
 
@@ -69,7 +69,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 
 Sesuaikan kedua connection URL bila nama database atau port diubah. Password hex dari perintah di atas aman dipakai langsung dalam URL; password lain harus di-URL-encode. Compose membuat URL koneksi internalnya sendiri dengan hostname `db` dari variabel database; aplikasi yang dijalankan menggunakan `npm` memakai URL `localhost`.
 
-`gis_app` mempunyai hak terhadap tabel akun dan sesi serta hanya `SELECT/INSERT` terhadap audit. `gis_owner` dipakai untuk migration, bukan runtime web. Migration mengaktifkan PostGIS; belum ada tabel GIS.
+`gis_app` mempunyai hak terhadap tabel akun dan sesi serta hanya `SELECT/INSERT` terhadap audit. `gis_owner` dipakai untuk migration, bukan runtime web. Migration mengaktifkan PostGIS serta membuat katalog layer dan tiga tabel data demo GIS dengan hak baca untuk runtime.
 
 `.env` diabaikan Git dan Docker build. Simpan credential di konfigurasi privat; jangan memasukkannya ke screenshot, commit, atau README. Mengubah password dalam `.env` tidak otomatis mengubah password role pada volume PostgreSQL yang sudah dibuat; perubahan tersebut memerlukan rotasi password database yang sesuai.
 
@@ -264,3 +264,72 @@ Buka **Administration → Approved accounts**. Setiap baris menampilkan nama (em
 Daftar diperbarui otomatis setiap 10 detik dan memiliki pagination 20 akun. Online berarti portal terbuka dalam tab yang terlihat; tab mengirim aktivitas setiap 20 detik. Menutup atau menyembunyikan tab mengirim pemberitahuan keluar. Bila browser atau koneksi terputus, aktivitas kedaluwarsa setelah 60 detik; perubahan terlihat pada pembaruan daftar berikutnya (sekitar 70 detik maksimum dalam kondisi normal). Akun tetap online jika tab atau sesi lain masih aktif. Saat pembaruan gagal, status menjadi **Unknown**, bukan menampilkan status lama sebagai informasi terkini.
 
 Untuk menguji: login viewer yang sudah disetujui di browser/profil berbeda, buka `/map`, lalu amati titik hijau di daftar admin. Tutup atau sembunyikan tab viewer dan tunggu pembaruan daftar untuk melihat titik abu-abu. Buka dua tab viewer untuk memastikan menutup satu tab tidak mematikan status tab lain. Daftar akun dan endpoint pembaruannya memvalidasi ADMIN server-side; aktivitas hanya dapat mengubah sesi milik pengguna yang sudah APPROVED.
+
+
+## Phase 2 — GIS Viewer
+
+Perbarui Codespace dari terminal repo (hentikan `npm run dev` dengan Ctrl+C terlebih dahulu):
+
+```bash
+git pull --ff-only origin main
+npm ci
+docker compose up -d --wait db
+npm run db:migrate
+npm run dev
+```
+
+Migration `0003_gis_viewer.sql` membuat `app.layers` sesuai model PLAN: type/source/state, style, visibility, uploader, timestamps, SRID/CRS, jumlah fitur, bbox PostGIS, serta metadata penyimpanan. Tiga layer demo sintetis sekitar Jakarta otomatis tersedia: **Work areas** (polygon), **Operating routes** (line), dan **Facilities** (point). Migration dicatat satu kali sehingga menjalankannya kembali tidak menggandakan data. Demo ditandai `storage_metadata.demo=true` dan boleh memiliki `uploaded_by=NULL` sebagai data sistem; layer lain tetap wajib mempunyai uploader. Tidak ada akun palsu/admin baru yang dibuat untuk seed.
+
+Geometri disimpan di tiga tabel `gis.layer_<uuid>` dengan primary key dan index GiST. Runtime `gis_app` hanya mendapat SELECT pada katalog dan tabel GIS. Trigger menjaga `updated_at`; migration menggunakan role pemilik database. Nama tabel dan storage metadata tidak dikirim ke browser. Enum RASTER/SHP disiapkan sesuai model PLAN, tetapi belum ada upload, importer, API raster, atau worker.
+
+### Menggunakan viewer
+
+- Login sebagai APPROVED VIEWER atau ADMIN, lalu buka `/map`.
+- **Layers:** centang untuk hide/show di browser sendiri; tombol `⌖` memusatkan peta ke layer. Klik titik, garis, atau polygon untuk melihat atribut. Popup memakai text nodes sehingga nilai atribut tidak dieksekusi sebagai HTML.
+- **Basemap:** Light canvas dan Dark canvas tersedia tanpa akses jaringan eksternal. OpenStreetMap dapat dipilih untuk peta jalan; pilihan ini membuat browser mengakses tile eksternal dan membagikan IP serta area peta ke provider. Attribution tetap tampil. Provider publik OSM hanya untuk penggunaan interaktif ringan yang sesuai [tile usage policy](https://operations.osmfoundation.org/policies/tiles/), tanpa bulk download/prefetch. Untuk deployment perusahaan berskala besar, ubah daftar server `src/lib/gis/basemaps.ts` ke provider berlisensi/self-hosted. Basemap internal kosong menjadi default.
+- **Legend:** simbol dan warna mengikuti layer yang sedang ditampilkan.
+- Kontrol kanan atas menyediakan zoom dan fullscreen. Skala meter/kilometer ada di bawah; koordinat pointer memakai longitude/latitude WGS84.
+- **Line:** klik sedikitnya dua titik. **Area:** klik sedikitnya tiga titik, lalu **Finish**. Titik bernomor dapat digeser; **Continue** melanjutkan penambahan titik. **Undo point**, **Clear**, dan daftar Selected points dapat menghapus titik. Maksimum 200 titik per pengukuran. Mengganti alat atau kembali ke Explore memulai ulang pengukuran.
+- Panjang dapat ditampilkan dalam **m / km**. Luas memakai **m² / ha / km²**, dengan tepat dua digit desimal. Hektar adalah satuan luas sehingga hanya tersedia untuk polygon. Pengukuran memakai jarak/luas geodesik Turf pada permukaan bumi, bukan jarak piksel. Gunakan polygon sederhana tanpa sisi saling berpotongan. Hasil merupakan estimasi, tidak menggantikan survei; pengukuran hanya tersimpan selama halaman terbuka.
+- Di ponsel, gunakan **Hide panels / Show panels** untuk membuka ruang peta. Fullscreen mencakup toolbar dan panel agar alat ukur tetap bisa digunakan.
+
+### Akses GIS dan struktur kode
+
+`/map` tetap memanggil `requireApprovedUser()` server-side. Semua `/api/layers`, `/api/layers/:id`, `/api/layers/:id/tiles/:z/:x/:y.pbf`, dan `/api/basemaps` memeriksa sesi dan approval pada setiap request. Tanpa sesi mendapat 401; PENDING/REJECTED mendapat 403. Halaman tetap redirect ke `/login`, `/pending`, atau `/access-denied` sesuai Phase 1. Layer non-READY ditolak untuk semua role; global `is_visible=false` ditolak untuk VIEWER (404), sementara ADMIN boleh preview layer READY yang tersembunyi. Toggle checkbox tidak mengubah global visibility.
+
+Tile menggunakan `ST_TileEnvelope`, spatial prefilter/index, `ST_AsMVTGeom`, dan `ST_AsMVT`. Validasi UUID, rentang Z/X/Y, dan nama tabel dari registry server menjaga batas query. Respons data privat memakai `private, no-store`; katalog diperiksa ulang setiap 30 detik ketika tab aktif, dan layer yang tidak lagi tersedia dilepas dari peta. Data yang sudah diterima browser tidak dapat ditarik kembali secara retroaktif.
+
+| Lokasi | Fungsi |
+| --- | --- |
+| `src/components/map/` | Browser boundary, MapLibre canvas, viewer, basemap, measurement panel. |
+| `src/components/layers/` | Layer panel dan legenda. |
+| `src/lib/gis/` | Tipe nonsecret, basemap allowlist, perhitungan/pemformatan ukuran. |
+| `src/services/layers/` | Guard API, katalog aman, pembacaan tile PostGIS. |
+| `src/app/api/layers/`, `src/app/api/basemaps/` | Endpoint baca yang terproteksi. |
+| `migrations/0003_gis_viewer.sql` | Model layer, grants, trigger, dan data demo. |
+
+### Pengujian Phase 2
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run test:integration
+```
+
+Unit test memeriksa jarak/luas geografis, konversi satuan dan dua desimal. Integration test memakai database terisolasi: katalog/metadata/tile/basemap tanpa sesi dan dengan PENDING/REJECTED, tile MVT yang benar-benar didekode, hidden/non-READY layer, parameter tile invalid, pencabutan akses, dan role database read-only.
+
+Uji manual memakai akun VIEWER: lihat tiga layer, toggle tiap layer dan legenda, klik fitur, pilih basemap, coba zoom/fullscreen/skala, buat garis/polygon, geser titik, ganti unit dan undo/clear. Ulangi akses langsung ke `/map` serta API GIS dengan akun PENDING dan REJECTED. Script `predev`/`prebuild` menyalin worker MapLibre versi terpasang beserta lisensinya ke `public/vendor/maplibre/` (generated, di-ignore Git). Worker dilayani dari origin aplikasi sendiri sehingga tidak bergantung CDN dan bisa digunakan di Next.js/Turbopack maupun Docker standalone.
+
+Browser memerlukan WebGL; bila map gagal dimulai, aktifkan hardware acceleration atau gunakan browser yang mendukung. Jika tile OSM tidak dapat diakses, pilih Light/Dark canvas; data GIS internal tetap dapat ditampilkan.
+
+
+Pengujian browser GIS yang dapat diulang (setelah `npm run build`):
+
+```bash
+npx playwright install chromium
+npm run test:gis
+```
+
+Runner membuat database sementara sendiri dan menghapusnya setelah selesai. Ia menguji WebGL/worker lokal, popup MVT, checkbox/legenda, basemap/attribution, fullscreen/zoom, pengukuran dan pergeseran titik, mobile, serta pencabutan akses. Respons tile OSM dimock hanya pada browser test agar suite deterministik; data GIS internal menggunakan PostGIS nyata. Screenshot disimpan di `test-results/gis/`. Jika Chromium telah tersedia di lokasi lain, gunakan `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.

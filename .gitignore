@@ -10,3 +10,6 @@ playwright-report/
 data/
 *.log
 .DS_Store
+
+# Generated from the installed, versioned MapLibre package.
+public/vendor/maplibre/

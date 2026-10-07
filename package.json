@@ -17,12 +17,19 @@
     "test:integration": "tsx scripts/test-integration.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:user": "tsx scripts/dev-user.ts"
+    "db:user": "tsx scripts/dev-user.ts",
+    "predev": "node scripts/prepare-map-assets.mjs",
+    "prebuild": "node scripts/prepare-map-assets.mjs",
+    "test:gis": "node scripts/test-gis-browser.mjs"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "1.11.3",
+    "@turf/area": "7.4.0",
+    "@turf/helpers": "7.4.0",
+    "@turf/length": "7.4.0",
     "dotenv": "18.0.5",
     "drizzle-orm": "0.45.3",
+    "maplibre-gl": "6.13.0",
     "next": "16.3.8",
     "next-auth": "5.0.0-beta.32",
     "pg": "8.23.1",
@@ -32,8 +39,10 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@mapbox/vector-tile": "3.0.0",
     "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.3.3",
+    "@types/geojson": "7946.0.16",
     "@types/node": "24.19.1",
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",
@@ -41,6 +50,7 @@
     "drizzle-kit": "0.31.11",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.8",
+    "pbf": "5.1.2",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.15",
     "typescript": "6.0.3",

@@ -31,15 +31,17 @@ export function PortalShell({
   user,
   current,
   children,
+  fullWidth = false,
 }: {
   user: PortalUser;
   current?: "map" | "admin";
   children: ReactNode;
+  fullWidth?: boolean;
 }) {
   const isApproved = user.status === "APPROVED";
 
   return (
-    <div className="portal-layout">
+    <div className={`portal-layout ${fullWidth ? "portal-map-layout" : ""}`}>
       {isApproved && <PresenceHeartbeat />}
       <header className="portal-header">
         <div className="header-content">
@@ -68,11 +70,11 @@ export function PortalShell({
         </nav>
       )}
 
-      <main id="main-content" className="portal-main">{children}</main>
-      <footer className="portal-footer">
+      <main id="main-content" className={fullWidth ? "portal-map-main" : "portal-main"}>{children}</main>
+      {!fullWidth && <footer className="portal-footer">
         <span>Company GIS Portal</span>
         <span>For authorized company users</span>
-      </footer>
+      </footer>}
     </div>
   );
 }

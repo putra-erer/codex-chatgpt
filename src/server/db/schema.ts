@@ -2,6 +2,10 @@ import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   check,
+  bigint,
+  boolean,
+  customType,
+  varchar,
   index,
   integer,
   jsonb,
@@ -99,3 +103,47 @@ export const auditLogs = appSchema.table("audit_logs", {
 export type AppUser = typeof users.$inferSelect;
 export type UserStatus = AppUser["status"];
 export type UserRole = AppUser["role"];
+
+
+export const layerType = appSchema.enum("layer_type", ["VECTOR", "RASTER"]);
+export const sourceType = appSchema.enum("source_type", ["SHP", "GEOJSON", "GEOTIFF", "POSTGIS"]);
+export const layerState = appSchema.enum("layer_state", ["PROCESSING", "READY", "FAILED", "DELETING"]);
+const footprint = customType<{ data: string }>({ dataType: () => "geometry(Geometry,4326)" });
+export const layers = appSchema.table("layers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 200 }).notNull(),
+  description: text("description").notNull().default(""),
+  layerType: layerType("layer_type").notNull(),
+  sourceType: sourceType("source_type").notNull(),
+  tableName: text("table_name").unique(),
+  filePath: text("file_path"),
+  srid: integer("srid"),
+  sourceSrid: integer("source_srid"),
+  sourceCrsWkt: text("source_crs_wkt"),
+  styleJson: jsonb("style_json").$type<Record<string, unknown>>().notNull().default({}),
+  isVisible: boolean("is_visible").notNull().default(true),
+  // System demo layers have no human uploader; imported layers will require one.
+  uploadedBy: uuid("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  state: layerState("state").notNull().default("PROCESSING"),
+  geometryType: text("geometry_type"),
+  featureCount: bigint("feature_count", { mode: "number" }),
+  bbox: footprint("bbox"),
+  storageMetadata: jsonb("storage_metadata").$type<Record<string, unknown>>().notNull().default({}),
+}, (table) => [
+  check("layers_name_nonempty", sql`length(btrim(${table.name})) > 0`),
+  check("layers_srid_positive", sql`${table.srid} IS NULL OR ${table.srid} > 0`),
+  check("layers_source_srid_positive", sql`${table.sourceSrid} IS NULL OR ${table.sourceSrid} > 0`),
+  check("layers_count_positive", sql`${table.featureCount} IS NULL OR ${table.featureCount} >= 0`),
+  check("layers_style_object", sql`jsonb_typeof(${table.styleJson}) = 'object'`),
+  check("layers_metadata_object", sql`jsonb_typeof(${table.storageMetadata}) = 'object'`),
+  check("layers_uploader_or_demo", sql`${table.uploadedBy} IS NOT NULL OR (${table.storageMetadata}->>'demo' = 'true' AND ${table.sourceType} = 'GEOJSON') IS TRUE`),
+  check("layers_table_name", sql`${table.tableName} IS NULL OR ${table.tableName} ~ '^layer_[0-9a-f]{32}$'`),
+  check("layers_source_consistent", sql`(${table.layerType} = 'VECTOR' AND ${table.sourceType} IN ('SHP','GEOJSON','POSTGIS') AND ${table.tableName} IS NOT NULL) OR (${table.layerType} = 'RASTER' AND ${table.sourceType} = 'GEOTIFF' AND ${table.tableName} IS NULL AND ${table.filePath} IS NOT NULL)`),
+  check("layers_ready_bbox", sql`${table.state} <> 'READY' OR ${table.bbox} IS NOT NULL`),
+  check("layers_ready_vector_srid", sql`${table.layerType} <> 'VECTOR' OR ${table.state} <> 'READY' OR (${table.srid} IS NOT NULL AND ${table.srid} = 4326)`),
+  index("layers_catalog_idx").on(table.state, table.isVisible, table.createdAt),
+  index("layers_uploader_idx").on(table.uploadedBy),
+  index("layers_bbox_idx").using("gist", table.bbox),
+]);
