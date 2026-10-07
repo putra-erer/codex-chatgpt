@@ -266,3 +266,69 @@ describe("production HTTP route authorization", () => {
     expect((await owner.query("SELECT 1 FROM app.audit_logs WHERE target_id=$1", [target.id])).rowCount).toBe(0);
   });
 });
+
+
+describe("approved account and presence APIs", () => {
+  function presence(fixture: Fixture | undefined, body: unknown, origin = baseUrl) {
+    return request("/api/presence", fixture, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(body) });
+  }
+
+  it("restricts approved account details to approved administrators", async () => {
+    expect((await request("/api/admin/users/approved")).status).toBe(401);
+    for (const status of ["PENDING", "REJECTED", "APPROVED"] as const) {
+      const viewer = await createFixture(status, "VIEWER");
+      expect((await request("/api/admin/users/approved", viewer)).status).toBe(403);
+    }
+    const admin = await createFixture("APPROVED", "ADMIN");
+    const response = await request("/api/admin/users/approved", admin);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    const data = await response.json();
+    expect(data.users.length).toBeGreaterThan(0);
+    expect(Object.keys(data.users[0]).sort()).toEqual(["approvalSource", "approvedAt", "approvedBy", "email", "id", "name", "online"]);
+    expect(JSON.stringify(data)).not.toContain(admin.token);
+  });
+
+  it("validates origin, session, status and strict heartbeat payloads", async () => {
+    const viewer = await createFixture("APPROVED", "VIEWER");
+    const payload = { tabId: randomUUID(), activity: "heartbeat" };
+    expect((await presence(undefined, payload)).status).toBe(401);
+    expect((await presence(viewer, payload, "https://attacker.example")).status).toBe(403);
+    expect((await presence(viewer, { ...payload, userId: randomUUID() })).status).toBe(400);
+    expect((await presence(viewer, { ...payload, tabId: "invalid" })).status).toBe(400);
+    expect((await presence(viewer, { ...payload, extra: "x".repeat(1100) })).status).toBe(400);
+    expect((await request("/api/presence", viewer, { method: "POST", headers: { origin: baseUrl, "content-type": "text/plain" }, body: "test" })).status).toBe(415);
+    for (const status of ["PENDING", "REJECTED"] as const) {
+      expect((await presence(await createFixture(status, "VIEWER"), payload)).status).toBe(403);
+    }
+    expect((await presence(await createFixture("APPROVED", "VIEWER", true), payload)).status).toBe(401);
+    expect((await presence(viewer, payload)).status).toBe(204);
+    const rows = await owner.query("SELECT session_token,tab_id FROM app.user_presence WHERE session_token=$1", [viewer.token]);
+    expect(rows.rows).toEqual([{ session_token: viewer.token, tab_id: payload.tabId }]);
+  });
+
+  it("updates online status without letting one tab remove another", async () => {
+    const admin = await createFixture("APPROVED", "ADMIN");
+    const viewer = await createFixture("APPROVED", "VIEWER");
+    await owner.query("UPDATE app.users SET approved_at=now()+interval '1 day',approved_by=$2 WHERE id=$1", [viewer.id, admin.id]);
+    const first = randomUUID();
+    const second = randomUUID();
+    async function account() {
+      const data = await (await request("/api/admin/users/approved", admin)).json();
+      return data.users.find((user: { id: string }) => user.id === viewer.id);
+    }
+    expect((await account()).online).toBe(false);
+    expect((await presence(viewer, { tabId: first, activity: "heartbeat" })).status).toBe(204);
+    expect((await presence(viewer, { tabId: second, activity: "heartbeat" })).status).toBe(204);
+    expect(await account()).toMatchObject({ online: true, approvedBy: { name: "HTTP test user", email: `${admin.id}@example.test` }, approvalSource: "administrator" });
+    await presence(viewer, { tabId: first, activity: "leave" });
+    expect((await account()).online).toBe(true);
+    await presence(viewer, { tabId: second, activity: "leave" });
+    expect((await account()).online).toBe(false);
+    await presence(viewer, { tabId: second, activity: "heartbeat" });
+    await owner.query("UPDATE app.user_presence SET last_seen=now()-interval '61 seconds' WHERE session_token=$1", [viewer.token]);
+    expect((await account()).online).toBe(false);
+    await owner.query("DELETE FROM app.sessions WHERE session_token=$1", [viewer.token]);
+    expect((await owner.query("SELECT 1 FROM app.user_presence WHERE session_token=$1", [viewer.token])).rowCount).toBe(0);
+  });
+});

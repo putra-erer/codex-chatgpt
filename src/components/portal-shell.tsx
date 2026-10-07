@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { signOutOfPortal } from "@/app/auth-actions";
+import { PresenceHeartbeat } from "@/components/presence-heartbeat";
 
 type PortalUser = {
   email: string;
@@ -39,6 +40,7 @@ export function PortalShell({
 
   return (
     <div className="portal-layout">
+      {isApproved && <PresenceHeartbeat />}
       <header className="portal-header">
         <div className="header-content">
           <PortalMark />

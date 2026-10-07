@@ -235,3 +235,43 @@ form { margin: 0; }
   .approval-list-footer { padding: 18px 22px; flex-direction: column; align-items: flex-start; }
   .approval-empty { padding: 36px 22px 40px; }
 }
+
+.approved-users-panel { margin-top: 24px; overflow: hidden; }
+.approved-refresh { flex-shrink: 0; min-width: 104px; }
+.approved-users-panel button:disabled { opacity: .55; cursor: default; }
+.approved-presence-note { display: flex; align-items: flex-start; gap: 18px; padding: 14px 26px; background: #f7faf9; border-top: 1px solid #e4efeb; color: #62756d; font-size: 11px; }
+.approved-live-label { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-weight: 600; color: #436456; }
+.approved-update-error { margin: 16px 26px; }
+.approved-users-table { width: 100%; border-collapse: collapse; text-align: left; table-layout: fixed; }
+.approved-users-table th { padding: 13px 18px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: #fafbfd; color: #758296; font-size: 10px; font-weight: 600; }
+.approved-users-table th:first-child { width: 30%; }
+.approved-users-table th:nth-child(2) { width: 13%; }
+.approved-users-table th:nth-child(3) { width: 24%; }
+.approved-users-table th:nth-child(4) { width: 33%; }
+.approved-users-table td { padding: 22px 18px; vertical-align: top; border-bottom: 1px solid #edf0f3; font-size: 12px; overflow-wrap: anywhere; }
+.approved-users-table th:first-child, .approved-users-table td:first-child { padding-left: 26px; }
+.approved-users-table th:last-child, .approved-users-table td:last-child { padding-right: 26px; }
+.approved-users-table tbody tr:last-child td { border-bottom: 0; }
+.approved-users-table strong { font-weight: 600; }
+.approved-account-email { color: var(--muted); font-size: 11px; }
+.approved-user-date { color: #617084; }
+.presence-status { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-size: 11px; }
+.presence-status.is-online { color: #267349; }
+.presence-status.is-offline { color: #75808d; }
+.presence-dot { flex: 0 0 auto; display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.presence-online { background: #21a45e; box-shadow: 0 0 0 3px #21a45e12; }
+.presence-offline { background: #929ba6; }
+.approved-empty { padding-top: 36px; padding-bottom: 40px; }
+
+@media (max-width: 760px) {
+  .approved-users-panel { margin-top: 20px; }
+  .approved-presence-note { flex-direction: column; gap: 7px; padding: 14px 22px; }
+  .approved-update-error { margin: 16px 22px; }
+  .approved-users-table, .approved-users-table tbody { display: block; }
+  .approved-users-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .approved-users-table tr { display: grid; grid-template-columns: 1fr 2fr; gap: 18px; padding: 22px; border-top: 1px solid var(--border); }
+  .approved-users-table td, .approved-users-table td:first-child, .approved-users-table td:last-child { display: block; border: 0; padding: 0; }
+  .approved-user-account, .approved-user-approver { grid-column: 1 / -1; }
+  .approved-users-table .approved-user-account { font-size: 13px; }
+  .approved-user-account .approved-account-email, .approved-user-approver .approved-account-email { font-size: 12px; }
+}

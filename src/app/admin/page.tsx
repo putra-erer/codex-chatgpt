@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { approveUser } from "@/app/admin/actions";
 import { ApproveUserButton } from "@/components/approve-user-button";
+import { ApprovedUsersPanel } from "@/components/approved-users-panel";
 import { PortalShell, StatusIcon } from "@/components/portal-shell";
 import { requireAdmin } from "@/server/authorization/guards";
 import { getDb } from "@/server/db";
 import { listPendingUsers } from "@/server/users/approval";
+import { listApprovedUsers } from "@/server/users/approved";
 
 export const metadata: Metadata = { title: "Administration" };
 
@@ -33,7 +35,10 @@ export default async function AdminPage({
   const query = await searchParams;
   const requestedPage = typeof query.page === "string" ? Number(query.page) : 1;
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const pending = await listPendingUsers(getDb(), page);
+  const [pending, approved] = await Promise.all([
+    listPendingUsers(getDb(), page),
+    listApprovedUsers(getDb()),
+  ]);
   const notice = typeof query.result === "string" && Object.hasOwn(notices, query.result)
     ? notices[query.result]
     : undefined;
@@ -128,6 +133,8 @@ export default async function AdminPage({
           </div>
         )}
       </section>
+
+      <ApprovedUsersPanel initialData={approved} />
 
       <div className="workspace-summary">
         <div><span>Administrator account</span><strong>{user.email}</strong></div>

@@ -71,6 +71,16 @@ export const sessions = appSchema.table("sessions", {
   index("sessions_expires_idx").on(table.expires),
 ]);
 
+// One browser tab can leave without marking another tab in the same session offline.
+export const userPresence = appSchema.table("user_presence", {
+  sessionToken: text("session_token").notNull().references(() => sessions.sessionToken, { onDelete: "cascade" }),
+  tabId: uuid("tab_id").notNull(),
+  lastSeen: timestamp("last_seen", { mode: "date", withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.sessionToken, table.tabId] }),
+  index("user_presence_session_seen_idx").on(table.sessionToken, table.lastSeen),
+]);
+
 export const auditLogs = appSchema.table("audit_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),

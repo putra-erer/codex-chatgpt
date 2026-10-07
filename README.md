@@ -2,7 +2,7 @@
 
 Portal internal dengan login Google, persetujuan akun, dan akses berdasarkan role. Phase 1 mencakup Next.js + TypeScript, Tailwind CSS, PostgreSQL + PostGIS, Drizzle ORM/migration, Docker Compose, serta authentication dan authorization di server.
 
-Halaman `/map` masih berupa placeholder. Sesuai permintaan lanjutan, `/admin` kini menyediakan **Account approvals** untuk menyetujui akun baru sebagai VIEWER melalui browser. MapLibre, layer GIS, upload SHP, raster, worker GIS, serta antarmuka perubahan role dan penolakan akun belum dibuat. Cakupan fondasi mengikuti instruksi Phase 1 pengguna; penomoran awal di [PLAN.md](PLAN.md) memisahkan authentication menjadi fase tersendiri.
+Halaman `/map` masih berupa placeholder. Sesuai permintaan lanjutan, `/admin` kini menyediakan **Account approvals** untuk menyetujui akun baru sebagai VIEWER melalui browser, serta **Approved accounts** untuk melihat akun yang telah disetujui dan status online/offline. MapLibre, layer GIS, upload SHP, raster, worker GIS, serta antarmuka perubahan role dan penolakan akun belum dibuat. Cakupan fondasi mengikuti instruksi Phase 1 pengguna; penomoran awal di [PLAN.md](PLAN.md) memisahkan authentication menjadi fase tersendiri.
 
 ## Menjalankan development
 
@@ -192,7 +192,9 @@ npm run test:integration
 
 Runner membuat database sementara dengan nama unik, menerapkan migration dua kali, lalu menjalankan pengujian terhadap adapter/Auth.js dan akses halaman HTTP dengan server hasil build. Database sementara dibuang setelah selesai, termasuk saat test gagal; database aplikasi yang tercantum dalam `.env` tidak diubah. Jalankan suite ini hanya pada lingkungan development. Profil Google sintetis digunakan di dalam test untuk menguji lifecycle akun tanpa meminta credential Google nyata atau menambahkan jalur login khusus ke aplikasi.
 
-Migration executable berada di `migrations/0000_identity.sql` dan `migrations/0001_postgis_runtime_permissions.sql`, beserta jurnal/snapshot Drizzle. Migration awal membuat tabel `app.users`, `app.accounts`, `app.sessions`, dan `app.audit_logs`; migration berikutnya menambahkan PostGIS, trigger `updated_at`, dan izin role runtime. `npm run db:migrate` menggunakan `MIGRATION_DATABASE_URL` dan lock agar migration paralel tidak saling bertabrakan.
+Migration `0002_user_presence.sql` menambahkan tabel aktivitas tab dengan penghapusan otomatis saat sesi dihapus. Jalankan `npm run db:migrate` setelah menarik pembaruan ini.
+
+Migration executable sebelumnya berada di `migrations/0000_identity.sql` dan `migrations/0001_postgis_runtime_permissions.sql`, beserta jurnal/snapshot Drizzle. Migration awal membuat tabel `app.users`, `app.accounts`, `app.sessions`, dan `app.audit_logs`; migration berikutnya menambahkan PostGIS, trigger `updated_at`, dan izin role runtime. `npm run db:migrate` menggunakan `MIGRATION_DATABASE_URL` dan lock agar migration paralel tidak saling bertabrakan.
 
 Jika kelak mengubah schema, buat migration baru dengan `npm run db:generate`, periksa SQL yang dihasilkan, lalu terapkan melalui `npm run db:migrate`. Jangan mengubah migration yang sudah diterapkan. Tidak tersedia perintah down-migration otomatis; pemulihan memakai backup terverifikasi atau migration koreksi baru.
 
@@ -253,3 +255,12 @@ Simpan backup di tempat privat di luar repository karena memuat akun dan sesi. U
 | `.env.example` | Daftar konfigurasi tanpa credential nyata. |
 | `next.config.ts`, `tsconfig.json`, `postcss.config.mjs`, `eslint.config.mjs` | Konfigurasi Next.js, TypeScript, Tailwind/PostCSS, dan lint. |
 | `PLAN.md` | Rancangan jangka panjang; fitur GIS di dalamnya belum diimplementasikan. |
+
+
+## Daftar approved dan status online
+
+Buka **Administration → Approved accounts**. Setiap baris menampilkan nama (email), titik hijau **Online** atau abu-abu **Offline**, tanggal/jam persetujuan dalam WIB, serta nama (email) administrator pemberi persetujuan. Admin awal yang dibuat melalui `SUPER_ADMIN_EMAILS` ditampilkan sebagai **System (SUPER_ADMIN_EMAILS)** berdasarkan audit. Jika catatan pemberi persetujuan tidak tersedia, aplikasi menyatakannya tanpa menebak identitas.
+
+Daftar diperbarui otomatis setiap 10 detik dan memiliki pagination 20 akun. Online berarti portal terbuka dalam tab yang terlihat; tab mengirim aktivitas setiap 20 detik. Menutup atau menyembunyikan tab mengirim pemberitahuan keluar. Bila browser atau koneksi terputus, aktivitas kedaluwarsa setelah 60 detik; perubahan terlihat pada pembaruan daftar berikutnya (sekitar 70 detik maksimum dalam kondisi normal). Akun tetap online jika tab atau sesi lain masih aktif. Saat pembaruan gagal, status menjadi **Unknown**, bukan menampilkan status lama sebagai informasi terkini.
+
+Untuk menguji: login viewer yang sudah disetujui di browser/profil berbeda, buka `/map`, lalu amati titik hijau di daftar admin. Tutup atau sembunyikan tab viewer dan tunggu pembaruan daftar untuk melihat titik abu-abu. Buka dua tab viewer untuk memastikan menutup satu tab tidak mematikan status tab lain. Daftar akun dan endpoint pembaruannya memvalidasi ADMIN server-side; aktivitas hanya dapat mengubah sesi milik pengguna yang sudah APPROVED.

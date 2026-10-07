@@ -531,7 +531,7 @@ README pada fase implementasi wajib menjelaskan local development, semua environ
 
 ## 9. Roadmap implementasi yang direkomendasikan
 
-Implementasi dilakukan bertahap. **Phase 1 yang diminta pengguna menggabungkan fondasi serta authentication/authorization** dan awalnya membatasi `/map` serta `/admin` menjadi placeholder. Pengguna kemudian meminta fitur persetujuan akun di `/admin`; perluasan ini hanya mencakup approve menjadi VIEWER. Penomoran 3–7 di bawah dipertahankan sebagai referensi rancangan awal, bukan instruksi untuk memulai fitur lanjutan. Worker dan fitur GIS tidak termasuk implementasi ini.
+Implementasi dilakukan bertahap. **Phase 1 yang diminta pengguna menggabungkan fondasi serta authentication/authorization** dan awalnya membatasi `/map` serta `/admin` menjadi placeholder. Pengguna kemudian meminta fitur persetujuan akun di `/admin`; perluasan ini mencakup approve menjadi VIEWER serta daftar akun approved, atribusi administrator, dan indikator aktivitas online/offline atas permintaan lanjutan pengguna. Penomoran 3–7 di bawah dipertahankan sebagai referensi rancangan awal, bukan instruksi untuk memulai fitur lanjutan. Worker dan fitur GIS tidak termasuk implementasi ini.
 
 | Fase | Hasil yang dibangun | Kriteria selesai |
 | --- | --- | --- |

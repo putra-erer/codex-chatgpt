@@ -105,11 +105,11 @@ afterAll(async () => {
 });
 
 describe("real PostgreSQL and Auth.js account lifecycle", () => {
-  it("applies both migrations once and enables PostGIS", async () => {
+  it("applies all migrations once and enables PostGIS", async () => {
     const { rows: [extension] } = await getPool().query<{ version: string }>("SELECT postgis_lib_version() AS version");
     expect(extension.version).toMatch(/^3\./);
     const { rows: [migrations] } = await owner.query<{ count: string }>("SELECT count(*) FROM drizzle.__drizzle_migrations");
-    expect(Number(migrations.count)).toBe(2);
+    expect(Number(migrations.count)).toBe(3);
   });
 
   it("creates a verified PENDING VIEWER with account and session through the actual Auth.js lifecycle", async () => {
