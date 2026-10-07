@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { VectorTile } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
 import { createServer } from "node:net";
@@ -118,7 +118,7 @@ afterAll(async () => {
 });
 
 describe("production HTTP route authorization", () => {
-  it.each(["/", "/pending", "/access-denied", "/map", "/admin"])("requires a session at %s", async (path) => {
+  it.each(["/", "/pending", "/access-denied", "/map", "/admin", "/admin/users"])("requires a session at %s", async (path) => {
     await expectRedirect(path, "/login");
   });
 
@@ -129,7 +129,7 @@ describe("production HTTP route authorization", () => {
     ["REJECTED", "ADMIN", "/access-denied"],
   ] as const)("restricts %s / %s to its status page", async (status, role, landing) => {
     const fixture = await createFixture(status, role);
-    for (const path of ["/login", "/map", "/admin"]) await expectRedirect(path, landing, fixture);
+    for (const path of ["/login", "/map", "/admin", "/admin/users"]) await expectRedirect(path, landing, fixture);
     const response = await request(landing, fixture);
     expect(response.status).toBe(200);
     expect(await response.text()).toContain(status === "PENDING"
@@ -148,12 +148,13 @@ describe("production HTTP route authorization", () => {
     expect(body).toContain("GIS Viewer");
     expect(body).not.toContain('href="/admin"');
     await expectRedirect("/admin", "/access-denied", fixture);
+    await expectRedirect("/admin/users", "/access-denied", fixture);
   });
 
   it("allows an approved administrator at both protected pages", async () => {
     const fixture = await createFixture("APPROVED", "ADMIN");
     await expectRedirect("/login", "/map", fixture);
-    for (const path of ["/map", "/admin"]) expect((await request(path, fixture)).status).toBe(200);
+    for (const path of ["/map", "/admin", "/admin/users"]) expect((await request(path, fixture)).status).toBe(200);
     expect(await (await request("/admin", fixture)).text()).toContain("Your administrator access is active.");
   });
 
@@ -164,6 +165,7 @@ describe("production HTTP route authorization", () => {
     expect((await request("/admin", fixture)).status).toBe(200);
     await owner.query("UPDATE app.users SET role='VIEWER' WHERE id=$1", [fixture.id]);
     await expectRedirect("/admin", "/access-denied", fixture);
+    await expectRedirect("/admin/users", "/access-denied", fixture);
     expect((await request("/map", fixture)).status).toBe(200);
     await owner.query("UPDATE app.users SET status='REJECTED',approved_at=NULL,approved_by=NULL WHERE id=$1", [fixture.id]);
     await expectRedirect("/map", "/access-denied", fixture);
@@ -337,15 +339,21 @@ describe("approved account and presence APIs", () => {
 
 
 describe("GIS viewer data authorization", () => {
-  const layerId = "33333333-3333-4333-8333-333333333333";
-  const tilePath = `/api/layers/${layerId}/tiles/12/3263/2118.pbf`;
+  const layerId = "abcdef01-2345-4234-8234-0123456789ab";
+  const tableName = "layer_abcdef012345423482340123456789ab";
+  const tilePath = `/api/layers/${layerId}/tiles/12/2048/2048.pbf`;
   beforeAll(async () => {
-    // Other authentication suites truncate app.users CASCADE, including layer metadata.
-    // Restore only the migration's synthetic registry rows in this isolated database.
-    const statements = readFileSync(resolve("migrations/0003_gis_viewer.sql"),"utf8").split("--> statement-breakpoint");
-    for(const statement of statements) if(statement.trim().startsWith("INSERT INTO app.layers")) {
-      await owner.query(statement.trim().replace(/;$/, " ON CONFLICT (id) DO NOTHING;"));
-    }
+    const actor = await createFixture("APPROVED", "ADMIN");
+    // Isolated automated-test fixture only; never seeded by application migrations.
+    await owner.query(`CREATE TABLE gis.${tableName}(feature_id integer PRIMARY KEY, properties jsonb NOT NULL, geom geometry(Point,4326) NOT NULL)`);
+    await owner.query(`INSERT INTO gis.${tableName} VALUES(1,'{"name":"Integration point"}',ST_SetSRID(ST_MakePoint(0,0),4326))`);
+    await owner.query(`GRANT SELECT ON gis.${tableName} TO gis_app`);
+    await owner.query(`INSERT INTO app.layers(id,name,layer_type,source_type,table_name,uploaded_by,srid,state,geometry_type,feature_count,bbox,style_json)
+      VALUES($1,'Integration layer','VECTOR','POSTGIS',$2,$3,4326,'READY','Point',1,ST_MakeEnvelope(-1,-1,1,1,4326),'{"color":"#4361ee","opacity":1,"width":3,"radius":7}')`,[layerId,tableName,actor.id]);
+  });
+  afterAll(async()=>{
+    await owner.query("DELETE FROM app.layers WHERE id=$1",[layerId]);
+    await owner.query(`DROP TABLE IF EXISTS gis.${tableName}`);
   });
   it("rejects every GIS endpoint for anonymous, pending and rejected accounts", async()=>{
     for(const path of ["/api/layers",`/api/layers/${layerId}`,tilePath,"/api/basemaps"]) {
@@ -361,13 +369,13 @@ describe("GIS viewer data authorization", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toContain("no-store");
     const {layers}=await response.json();
-    expect(layers).toHaveLength(3);
+    expect(layers).toHaveLength(1);
     for(const layer of layers) {
-      expect(layer.demo).toBe(true);
+      expect(layer).not.toHaveProperty("demo");
       expect(layer.bounds).toHaveLength(4);
       expect(layer).not.toHaveProperty("tableName");expect(layer).not.toHaveProperty("filePath");expect(layer).not.toHaveProperty("storageMetadata");
     }
-    const lon=106.827,lat=-6.180,z=12;
+    const lon=0,lat=0,z=12;
     const x=Math.floor((lon+180)/360*2**z);
     const y=Math.floor((1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2*2**z);
     const tile=await request(`/api/layers/${layerId}/tiles/${z}/${x}/${y}.pbf`,viewer);
@@ -382,7 +390,7 @@ describe("GIS viewer data authorization", () => {
     const admin=await createFixture("APPROVED","ADMIN");
     try {
       await owner.query("UPDATE app.layers SET is_visible=false WHERE id=$1",[layerId]);
-      expect((await (await request("/api/layers",viewer)).json()).layers).toHaveLength(2);
+      expect((await (await request("/api/layers",viewer)).json()).layers).toHaveLength(0);
       for(const path of [`/api/layers/${layerId}`,tilePath]) expect((await request(path,viewer)).status).toBe(404);
       expect((await request(`/api/layers/${layerId}`,admin)).status).toBe(200);
       await owner.query("UPDATE app.layers SET state='FAILED' WHERE id=$1",[layerId]);
@@ -402,8 +410,72 @@ describe("GIS viewer data authorization", () => {
     const runtime=new Pool({connectionString:process.env.DATABASE_URL});
     try {
       await expect(runtime.query("DELETE FROM app.layers WHERE id=$1",[layerId])).rejects.toMatchObject({code:"42501"});
-      await expect(runtime.query("DELETE FROM gis.layer_33333333333343338333333333333333")).rejects.toMatchObject({code:"42501"});
+      await expect(runtime.query(`DELETE FROM gis.${tableName}`)).rejects.toMatchObject({code:"42501"});
       await expect(runtime.query("CREATE TABLE gis.forbidden(id integer)")).rejects.toMatchObject({code:"42501"});
     } finally {await runtime.end();}
+  });
+});
+
+describe("user management production server actions",()=>{
+  async function formFor(admin: Fixture, target: Fixture, operation: string) {
+    const html=await(await request(`/admin/users?q=${target.id}`,admin)).text();
+    const formHtml=[...html.matchAll(/<form\b[^>]*>[\s\S]*?<\/form>/g)].map(([form])=>form)
+      .find(form=>form.includes(`data-user-id="${target.id}"`) && form.includes(`data-operation="${operation}"`));
+    expect(formHtml).toBeDefined();
+    const form=new FormData();
+    const action=formHtml!.match(/name="(\$ACTION_ID_[^"]+)"/);
+    expect(action).toBeTruthy();
+    form.set(action![1],"");
+    for(const [,key,value] of formHtml!.matchAll(/<input[^>]*name="([^"]+)"[^>]*value="([^"]*)"/g)) form.set(key,value.replaceAll("&amp;","&"));
+    return form;
+  }
+  function post(actor: Fixture|undefined, form: FormData, origin=baseUrl) {
+    return request("/admin/users",actor,{method:"POST",headers:{origin},body:form});
+  }
+  function result(response: Response) { return new URL(response.headers.get("location")!,baseUrl).searchParams.get("result"); }
+  it("allows approve, role change and reject through forms, with fresh-session enforcement",async()=>{
+    const admin=await createFixture("APPROVED","ADMIN"),target=await createFixture("PENDING","VIEWER");
+    const approve=await formFor(admin,target,"approve");
+    approve.set("approvedBy",target.id);approve.set("role","ADMIN");
+    expect(result(await post(admin,approve))).toBe("approved");
+    expect((await owner.query("SELECT role,approved_by FROM app.users WHERE id=$1",[target.id])).rows[0]).toEqual({role:"VIEWER",approved_by:admin.id});
+    expect((await request("/map",target)).status).toBe(200);
+    const promote=await formFor(admin,target,"role");promote.set("role","ADMIN");
+    expect(result(await post(admin,promote))).toBe("role");
+    expect((await request("/admin/users",target)).status).toBe(200);
+    const demote=await formFor(admin,target,"role");demote.set("role","VIEWER");
+    expect(result(await post(admin,demote))).toBe("role");
+    await expectRedirect("/admin/users","/access-denied",target);
+    expect(result(await post(admin,await formFor(admin,target,"reject")))).toBe("rejected");
+    await expectRedirect("/map","/login",target);
+    expect((await owner.query("SELECT status,approved_by,approved_at FROM app.users WHERE id=$1",[target.id])).rows[0]).toEqual({status:"REJECTED",approved_by:null,approved_at:null});
+  });
+  it("blocks every mutation from anonymous, viewer, pending, rejected and newly demoted accounts",async()=>{
+    const admin=await createFixture("APPROVED","ADMIN"),target=await createFixture("PENDING","VIEWER");
+    const viewer=await createFixture("APPROVED","VIEWER"),pending=await createFixture("PENDING","ADMIN"),rejected=await createFixture("REJECTED","ADMIN");
+    for(const operation of ["approve","reject","role"]){
+      const form=await formFor(admin,target,operation);if(operation==="role")form.set("role","ADMIN");
+      for(const [actor,path] of [[undefined,"/login"],[viewer,"/access-denied"],[pending,"/pending"],[rejected,"/access-denied"]] as const){
+        const response=await post(actor,form);expect(response.status).toBe(303);
+        expect(new URL(response.headers.get("location")!,baseUrl).pathname).toBe(path);
+      }
+      expect((await post(admin,form,"https://attacker.example")).status).toBe(500);
+    }
+    const form=await formFor(admin,target,"approve");
+    await owner.query("UPDATE app.users SET role='VIEWER' WHERE id=$1",[admin.id]);
+    expect(new URL((await post(admin,form)).headers.get("location")!,baseUrl).pathname).toBe("/access-denied");
+    expect((await owner.query("SELECT status,role FROM app.users WHERE id=$1",[target.id])).rows[0]).toEqual({status:"PENDING",role:"VIEWER"});
+  });
+  it("returns safe errors for invalid roles, duplicate parameters, missing users and stale versions",async()=>{
+    const admin=await createFixture("APPROVED","ADMIN"),target=await createFixture("PENDING","VIEWER");
+    const form=await formFor(admin,target,"role");form.set("role","OWNER");
+    expect(result(await post(admin,form))).toBe("invalid");
+    form.set("role","ADMIN");form.append("userId",admin.id);
+    expect(result(await post(admin,form))).toBe("invalid");
+    form.set("userId",randomUUID());expect(result(await post(admin,form))).toBe("missing");
+    form.set("userId",target.id);form.set("version","stale");expect(result(await post(admin,form))).toBe("conflict");
+    const html=await(await request("/admin/users?result=failed",admin)).text();
+    expect(html).toContain("The change could not be saved.");
+    expect(html).not.toContain("postgresql://");
   });
 });

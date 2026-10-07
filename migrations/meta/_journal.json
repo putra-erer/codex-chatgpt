@@ -29,6 +29,13 @@
       "when": 1791332577116,
       "tag": "0003_gis_viewer",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791348153755,
+      "tag": "0004_remove_gis_demo",
+      "breakpoints": true
     }
   ]
 }

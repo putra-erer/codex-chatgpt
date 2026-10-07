@@ -326,7 +326,6 @@ form { margin: 0; }
 .gis-map-canvas .maplibregl-canvas { outline-offset: -3px; }
 .gis-map-loading { position: absolute; inset: 0; display: grid; place-items: center; color: #59747f; background: #e8eff0; font-size: 14px; }
 .gis-map-label { position: absolute; top: 18px; left: 18px; display: flex; align-items: center; gap: 8px; border: 1px solid #dce5e8; border-radius: 6px; background: #ffffffed; padding: 9px 12px; font-size: 11px; color: #486572; pointer-events: none; }
-.gis-demo-tag { font-size: 9px; font-weight: 600; color: #8799a2; margin-left: 8px; letter-spacing: 1px; }
 .gis-coordinate-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 29px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 12px; background: #f8fafb; border-top: 1px solid #d7e3e7; color: #6b7e8b; font-size: 10px; font-variant-numeric: tabular-nums; }
 .gis-map-notice { position: absolute; top: 65px; left: 18px; right: 56px; background: #fff7e6; color: #77551e; border: 1px solid #f0d8a4; border-radius: 6px; padding: 12px; display: flex; align-items: center; gap: 12px; font-size: 12px; z-index: 2; }
 .gis-map-notice button { background: #fff; border: 1px solid #ddcda9; color: inherit; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
@@ -362,4 +361,36 @@ form { margin: 0; }
   .gis-sidebar { position: absolute; top: 0; bottom: 0; left: 0; width: min(310px, 85vw); box-shadow: 8px 0 20px #18333c18; }
   .gis-map-label { left: 10px; top: 10px; padding: 8px; }
   .gis-coordinate-bar { font-size: 9px; }
+}
+
+/* Administration workspace */
+.admin-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid #dde5eb; }
+.admin-nav > * { padding: 10px 16px; border-radius: 8px; font-size: 14px; }
+.admin-nav a[aria-current="page"] { background: #e6f4f1; color: #087e77; font-weight: 600; }
+.admin-nav > span { color: #8796a4; }
+.admin-nav small { font-size: 10px; margin-left: 4px; }
+.admin-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.admin-stats a { border: 1px solid #dce5ed; background: white; border-radius: 10px; padding: 20px; display: grid; gap: 8px; }
+.admin-stats span { font-size: 13px; color: #60758b; }
+.admin-stats strong { font-size: 28px; color: #087e77; }
+.admin-help { margin: 20px 0 28px; line-height: 1.8; }
+.user-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 22px; border-bottom: 1px solid #e1e7ed; }
+.user-filters label { display: grid; gap: 6px; font-size: 13px; color: #496179; }
+.user-filters input, .user-filters select, .user-actions select { padding: 10px; background: white; color: #19354a; border: 1px solid #cfdce6; border-radius: 6px; min-height: 40px; }
+.users-table-scroll { overflow-x: auto; }
+.users-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+.users-table th { background: #f6f9fb; color: #557085; font-weight: 600; padding: 14px; white-space: nowrap; }
+.users-table td { padding: 18px 14px; border-top: 1px solid #e4eaf0; vertical-align: top; min-width: 130px; max-width: 280px; overflow-wrap: anywhere; }
+.users-table small { display: block; margin-top: 5px; }
+.users-table time { font-size: 12px; }
+.user-actions { display: flex; gap: 8px; flex-wrap: wrap; width: 215px; }
+.user-actions form { display: flex; gap: 5px; }
+.user-actions .button { font-size: 12px; padding: 8px 12px; }
+.button-danger { color: #a63232; background: #fff5f5; border: 1px solid #edcbcb; }
+.badge-rejected { color: #a63232; background: #fff1f1; border-color: #f1cdcd; }
+@media (max-width: 760px) {
+  .admin-stats { grid-template-columns: repeat(2, 1fr); }
+  .user-filters { padding: 16px; }
+  .user-filters label:first-child { width: 100%; }
+  .admin-nav > * { padding: 8px; }
 }

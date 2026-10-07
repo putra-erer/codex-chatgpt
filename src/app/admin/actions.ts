@@ -26,5 +26,6 @@ export async function approveUser(formData: FormData) {
     }
   }
   revalidatePath("/admin");
+  revalidatePath("/admin/users");
   redirect(`/admin?${new URLSearchParams({ result, page: String(page) })}`);
 }

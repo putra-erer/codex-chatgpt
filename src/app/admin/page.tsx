@@ -1,3 +1,5 @@
+import { AdminNav } from "@/components/admin/admin-nav";
+import { userSummary } from "@/server/users/management";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { approveUser } from "@/app/admin/actions";
@@ -35,9 +37,10 @@ export default async function AdminPage({
   const query = await searchParams;
   const requestedPage = typeof query.page === "string" ? Number(query.page) : 1;
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const [pending, approved] = await Promise.all([
+  const [pending, approved, summary] = await Promise.all([
     listPendingUsers(getDb(), page),
     listApprovedUsers(getDb()),
+    userSummary(getDb()),
   ]);
   const notice = typeof query.result === "string" && Object.hasOwn(notices, query.result)
     ? notices[query.result]
@@ -45,6 +48,7 @@ export default async function AdminPage({
 
   return (
     <PortalShell user={user} current="admin">
+      <AdminNav current="dashboard" />
       <div className="page-heading">
         <div>
           <span className="eyebrow">Company portal</span>
@@ -53,6 +57,17 @@ export default async function AdminPage({
         </div>
         <span className="status-badge badge-approved"><span className="badge-dot" />Administrator</span>
       </div>
+
+      <div className="admin-stats" aria-label="User statistics">
+        {([
+          ["Total users", summary.total, "/admin/users"],
+          ["Pending", summary.pending, "/admin/users?status=PENDING"],
+          ["Approved", summary.approved, "/admin/users?status=APPROVED"],
+          ["Rejected", summary.rejected, "/admin/users?status=REJECTED"],
+          ["Administrators", summary.administrators, "/admin/users?status=APPROVED&role=ADMIN"],
+        ] as const).map(([label, total, href]) => <Link key={label} href={href}><span>{label}</span><strong>{total}</strong></Link>)}
+      </div>
+      <p className="admin-help"><Link href="/admin/users" className="button button-primary">Manage users</Link> <span className="muted">Approve, reject, and change roles in the Users section.</span></p>
 
       {notice && (
         <div className={`notice approval-notice ${notice.error ? "notice-error" : "notice-success"}`} role={notice.error ? "alert" : "status"}>

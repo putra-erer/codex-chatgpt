@@ -1,10 +1,10 @@
 # Rencana Company GIS Web Portal
 
-Status: **Phase 1 dan Phase 2 GIS Viewer sudah diimplementasikan. Upload/import SHP, raster, worker, dan fitur lanjutan di bawah masih rancangan fase berikutnya**.
+Status: **Phase 1, Phase 2 GIS Viewer dan Phase 3 User Management sudah diimplementasikan. Upload/import SHP, raster, worker, dan fitur lanjutan di bawah masih rancangan fase berikutnya**.
 
 Dokumen ini awalnya dibuat ketika repository masih kosong sebagai rancangan keseluruhan portal GIS internal. Instruksi implementasi berikutnya menetapkan **Phase 1** sebagai Next.js/TypeScript/Tailwind, PostgreSQL/PostGIS, ORM/migration, Docker Compose, Google OAuth, user/status/role, bootstrap `SUPER_ADMIN_EMAILS`, dan protected routes server-side. Scope eksplisit tersebut menggantikan pembagian fondasi/authentication pada roadmap awal.
 
-Implementasi saat ini menyediakan `/login`, `/pending`, `/access-denied`, dan GIS Viewer `/map` (Phase 2). Permintaan lanjutan pengguna menambahkan **Account approvals** di `/admin`: administrator dapat menyetujui akun PENDING sebagai APPROVED/VIEWER melalui browser, dengan pemeriksaan izin server dan audit transaksional. Petunjuk menjalankan aplikasi dan pengujian ada di [README.md](README.md). MapLibre, katalog layer, MVT demo, panel GIS dan pengukuran kini tersedia. Upload SHP, raster, worker GIS, serta antarmuka penolakan/perubahan role belum dibuat. Diagram, schema GIS, endpoint, dan acceptance criteria fitur lanjutan di bawah adalah rancangan, bukan pernyataan bahwa fitur tersebut sudah tersedia.
+Implementasi saat ini menyediakan `/login`, `/pending`, `/access-denied`, dan GIS Viewer `/map` (Phase 2). Permintaan lanjutan pengguna menambahkan **Account approvals** di `/admin`: administrator dapat menyetujui akun PENDING sebagai APPROVED/VIEWER melalui browser, dengan pemeriksaan izin server dan audit transaksional. Petunjuk menjalankan aplikasi dan pengujian ada di [README.md](README.md). MapLibre, katalog layer kosong, layanan MVT, panel GIS dan pengukuran kini tersedia. Phase 3 menambahkan dashboard, `/admin/users`, approve/reject/change role, filter/pencarian dan proteksi administrator. Upload SHP, raster dan worker GIS belum dibuat. Diagram, schema GIS, endpoint, dan acceptance criteria fitur lanjutan di bawah adalah rancangan, bukan pernyataan bahwa fitur tersebut sudah tersedia.
 
 ## 1. Analisis kebutuhan dan batas lingkup
 
@@ -115,7 +115,7 @@ Middleware hanya membantu redirect. Route handlers, server actions jika digunaka
 
 Schema `app` menyimpan data aplikasi. Schema `gis` menyimpan tabel hasil import yang dipublikasikan; `gis_staging` menampung pekerjaan worker dan tidak dapat dibaca role web. Extension PostGIS diaktifkan oleh migration role. UUID dibuat server/database, waktu memakai `timestamptz`, dan audit/metadata tidak berisi credential.
 
-SQL berikut adalah rancangan schema lengkap **di dalam dokumen**. Migration executable Phase 1 berada di `migrations/` dan mencakup identitas, sesi, audit, PostGIS, serta izin database; tabel GIS, layer, dan job di rancangan ini belum diimplementasikan. Gunakan file migration untuk menjalankan aplikasi, bukan menyalin SQL rancangan ini ke database.
+SQL berikut adalah rancangan schema lengkap **di dalam dokumen**. Migration executable Phase 1 berada di `migrations/` dan mencakup identitas, sesi, audit, PostGIS, serta izin database; katalog layer sudah dibuat pada Phase 2; tabel job/upload/raster di rancangan ini belum diimplementasikan. Gunakan file migration untuk menjalankan aplikasi, bukan menyalin SQL rancangan ini ke database.
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS postgis;
@@ -537,14 +537,14 @@ Implementasi dilakukan bertahap. **Phase 1 yang diminta pengguna menggabungkan f
 | --- | --- | --- |
 | **0 — Perencanaan awal** | Dokumen arsitektur, schema, folder, roadmap, dan keamanan ini. | Dokumen tersedia; digunakan sebagai rancangan jangka panjang. |
 | **1 — Fondasi dan authentication (scope implementasi pengguna)** | Next.js/TypeScript/Tailwind, config, Compose app/db/migrate, Drizzle migration, PostGIS, Google Auth.js/database session, status/role, bootstrap admin, guard server, halaman status serta placeholder map/admin, README dan test. | Migration baru dan ulang berhasil; role runtime diuji; lint/typecheck/test/build; alur status/role serta akses HTTP server diuji. Login Google nyata tetap diuji di browser dengan credential development. |
-| **2 — GIS Viewer (scope lanjutan pengguna)** | MapLibre browser-only, navbar/sidebar, layer/basemap/legend, popup, kontrol peta, pengukuran garis/polygon, model layer dan demo PostGIS/MVT. Authentication awal sudah digabung ke Phase 1. | APPROVED dapat mengakses viewer; PENDING/REJECTED ditolak server-side; lint/typecheck/build/test. Upload SHP/raster tetap di fase berikutnya. |
-| **3 — Administrasi pengguna** | Admin shell/dashboard awal, user list, approve/reject/change role, audit dan tampilan audit dasar. | Viewer gagal memanggil API manual; approval membuka akses; rejection/demotion berlaku pada request berikutnya; concurrent last-admin test lulus. |
+| **2 — GIS Viewer (scope lanjutan pengguna)** | MapLibre browser-only, navbar/sidebar, layer/basemap/legend, popup, kontrol peta, pengukuran garis/polygon, model layer dan layanan PostGIS/MVT (seed contoh telah dihapus pada Phase 3). Authentication awal sudah digabung ke Phase 1. | APPROVED dapat mengakses viewer; PENDING/REJECTED ditolak server-side; lint/typecheck/build/test. Upload SHP/raster tetap di fase berikutnya. |
+| **3 — Administrasi pengguna** | Dashboard, user list/filter/search, approve/reject/change role, proteksi last admin/SUPER_ADMIN; memakai tabel audit yang sudah ada, tanpa audit system atau halaman audit baru. | Viewer gagal memanggil API manual; approval membuka akses; rejection/demotion berlaku pada request berikutnya; concurrent last-admin test lulus. |
 | **4 — Portal peta dan vector pipeline** | MapLibre UI/control/basemap, katalog/legend/search/popup, storage local, job worker, Shapefile import, MVT, metadata/style/visibility/delete layer. | ZIP fixture valid dapat diunggah admin, menjadi layer READY, tampil dan bisa dicari/diklik viewer; hidden/deleted tidak bocor; file berbahaya ditolak. |
 | **5 — Raster pipeline** | GeoTIFF validation, metadata, original storage, bounded XYZ derivation, raster style/legend, authorized tile serving dan cleanup. | GeoTIFF fixture tampil sejajar vector pada koordinat yang benar, metadata lengkap, nodata benar, tile privat, resource limit/failure/retry diuji. |
 | **6 — Integrasi dan kesiapan deployment** | Penyempurnaan dashboard/audit, responsive/accessibility, security regression, observability, backup/restore, dokumentasi dan Compose produksi. | End-to-end role × status lulus; build/typecheck/test berhasil; restart job aman; fresh setup dan restore diuji; dependency serta konfigurasi deployment ditinjau. |
 | **7 — Pengembangan opsional** | S3/MinIO adapter, COG + dynamic tiler, GeoJSON upload, trusted PostGIS registration, ACL lebih detail dan optimasi dataset besar. | Dipilih berdasarkan kebutuhan nyata; bukan syarat untuk menganggap fitur MVP pada fase 1–6 lengkap. |
 
-**Batas pekerjaan saat ini:** pengguna telah meminta Phase 2 GIS Viewer secara eksplisit. Implementasikan viewer, model layer, demo, dan pengukuran; jangan memulai upload/import SHP, raster, worker atau fase berikutnya. Hasil check dilaporkan berdasarkan eksekusi aktual, bukan keberadaan file test saja.
+**Batas pekerjaan saat ini:** Phase 3 User Management dan pembersihan semua seed GIS contoh, sesuai permintaan terbaru. Jangan memulai upload/import SHP, raster, GDAL, worker, atau fase berikutnya. Hasil check dilaporkan berdasarkan eksekusi aktual, bukan keberadaan file test saja.
 
 ## 10. Strategi pengujian dan acceptance criteria
 
@@ -579,9 +579,13 @@ Pemeriksaan yang hanya menghasilkan PID/open port, nol test, atau build UI tidak
 - Provider basemap, kapasitas dataset terbesar, jenis raster dominan, origin produksi, retensi data, dan kebijakan internal Google perlu ditetapkan sebelum deployment. Default teknis di atas memungkinkan fondasi berjalan tanpa menunggu preferensi tersebut.
 - Default vector/raster belum diuji terhadap data perusahaan. Strategi tile raster praproses sengaja dibatasi; dataset besar mungkin memerlukan fase COG/dynamic tiler sebelum layak digunakan.
 - Fondasi, authentication, protected routes, dan migration executable Phase 1 kini tersedia; [README.md](README.md) menjelaskan setup serta cara memverifikasinya. Ketersediaan kode tidak otomatis menyatakan seluruh acceptance criteria GIS pada dokumen ini sudah terpenuhi.
-- Pekerjaan mencakup fondasi Phase 1 dan GIS Viewer Phase 2 yang diminta pengguna. Upload/import, raster, worker, dan administrasi lengkap tetap menunggu instruksi berikutnya.
+- Pekerjaan mencakup Phase 1, GIS Viewer Phase 2, serta User Management Phase 3. Upload/import, raster, worker, dan pengelolaan layer lanjutan tetap menunggu instruksi berikutnya.
 
 
 ## Catatan implementasi Phase 2 GIS Viewer
 
-Scope viewer yang diminta pengguna menggunakan katalog `app.layers` serta data demo sintetis berformat PostGIS/MVT. Satu penyesuaian schema: `uploaded_by` boleh null hanya untuk demo sistem (`storage_metadata.demo=true` dan source GEOJSON), agar migration bisa berjalan sebelum ada pengguna Google. Layer lain tetap membutuhkan uploader. Tipe/source/state dan metadata raster tersedia sebagai fondasi model saja; tidak ada pipeline upload/raster yang diaktifkan. Pengukuran geodesik adalah fitur browser, dengan titik yang dapat dipilih/digeser dan satuan m/km serta m²/ha/km² (dua desimal). Rincian penggunaan, batas basemap eksternal, migration, dan pengujian tersedia di README.
+Viewer menggunakan katalog `app.layers` dan layanan PostGIS/MVT. Phase 3 menghapus seed GIS contoh dari migration instalasi baru dan menyediakan migration terarah untuk database yang sudah terisi contoh lama. Schema GIS, API, panel, popup, legenda, basemap dan pengukuran tetap dipertahankan. `uploaded_by` nullable untuk layer sistem; upload di fase berikutnya harus merekam actor. Peta tanpa data menampilkan "No GIS layers available." dengan tampilan awal global. Pengukuran geodesik tetap tersedia dalam m/km serta m²/ha/km² (dua desimal).
+
+## Catatan implementasi Phase 3
+
+Dashboard `/admin` dan `/admin/users` memerlukan APPROVED ADMIN di server. Mutasi melalui Server Actions juga memeriksa ulang privilege dan identitas Google actor dalam transaksi, memakai lock bersama bootstrap/CLI/quick approval. Approve mencatat actor/waktu; reject mencabut sesi; role baru segera digunakan oleh guard server. Perubahan role eksplisit sebelum approval dipertahankan. Akun bootstrap tidak dapat ditolak/didemote, dan sedikitnya satu approved admin harus tersisa setelah mutasi, termasuk request paralel. Versi baris mencegah formulir lama menimpa keputusan terbaru. Statistik, filter/pencarian/pagination, konfirmasi, serta pesan error/empty state tersedia. Panel presence/atribusi approval lama tetap dipertahankan. Tidak ada CRUD layer, upload, atau audit system baru. Instruksi upgrade, migration dan matriks pengujian ada di README.

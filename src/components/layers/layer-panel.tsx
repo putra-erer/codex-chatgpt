@@ -19,7 +19,7 @@ export function LayerPanel({
       </div>
       <p className="gis-help">Choose the information shown on your map.</p>
       {layers.length === 0 && (
-        <p className="gis-empty">No layers are available for your account.</p>
+        <p className="gis-empty">No GIS layers available.</p>
       )}
       <div className="gis-layer-list">
         {layers.map((layer) => (

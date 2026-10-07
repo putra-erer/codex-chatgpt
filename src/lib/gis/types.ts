@@ -13,7 +13,6 @@ export type MapLayer = {
   featureCount: number;
   bounds: Bounds;
   style: LayerStyle;
-  demo: boolean;
   isVisible: boolean;
 };
 export type Basemap = {

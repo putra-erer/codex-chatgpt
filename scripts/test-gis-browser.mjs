@@ -13,7 +13,7 @@ await mkdir(screenshots, { recursive: true });
 const require = createRequire(`${root}/package.json`);
 const { Client } = require("pg");
 const { config } = require("dotenv");
-const { chromium } = require("@playwright/test");
+const { chromium, expect } = require("@playwright/test");
 if (process.env.NODE_ENV === "production")
   throw new Error("Use a development PostgreSQL server for browser tests.");
 config({ path: [`${root}/.env.local`, `${root}/.env`], quiet: true });
@@ -86,6 +86,9 @@ try {
     return { id, token, email };
   }
   const participant = await fixture("APPROVED", "VIEWER", "viewer");
+  const administrator = await fixture("APPROVED", "ADMIN", "administrator");
+  const applicant = await fixture("PENDING", "VIEWER", 0);
+  const protectedAdmin = await fixture("APPROVED", "ADMIN", "protected");
   await cp(`${root}/.next/static`, `${root}/.next/standalone/.next/static`, {
     recursive: true,
   });
@@ -109,7 +112,7 @@ try {
       AUTH_SECRET: randomBytes(32).toString("hex"),
       GOOGLE_CLIENT_ID: "browser-client",
       GOOGLE_CLIENT_SECRET: "browser-secret",
-      SUPER_ADMIN_EMAILS: "",
+      SUPER_ADMIN_EMAILS: protectedAdmin.email,
     },
     stdio: "ignore",
   });
@@ -146,15 +149,16 @@ try {
     },
   ]);
   const page = await adminContext.newPage();
+  page.setDefaultTimeout(20000);
   const browserErrors = [];
   page.on("pageerror", () => browserErrors.push("page-error"));
   await page.goto(`${baseUrl}/map`);
   await page.locator('[data-map-ready="true"]').waitFor({ timeout: 30000 });
-  await page.getByText("3 visible layers", { exact: false }).waitFor();
+  await page.getByText("0 visible layers", { exact: false }).waitFor();
   await delay(1800);
   ensure(
-    (await page.locator('input[type="checkbox"]').count()) === 3,
-    "missing sample layers",
+    (await page.locator('input[type="checkbox"]').count()) === 0,
+    "unexpected seeded layers",
   );
   ensure(
     (await page.locator('a[href="/admin"]').count()) === 0,
@@ -165,41 +169,16 @@ try {
     mapBox && mapBox.width > 200 && mapBox.height > 200,
     "map has no usable dimensions",
   );
-  function screen(lon, lat) {
-    const mx = (v) => (v + 180) / 360;
-    const my = (v) =>
-      (1 - Math.asinh(Math.tan((v * Math.PI) / 180)) / Math.PI) / 2;
-    const west = mx(106.809),
-      east = mx(106.854),
-      north = my(-6.16),
-      south = my(-6.22);
-    const scale = Math.min(
-      (mapBox.width - 110) / (east - west),
-      (mapBox.height - 110) / (south - north),
-    );
-    return {
-      x: mapBox.x + mapBox.width / 2 + (mx(lon) - (west + east) / 2) * scale,
-      y: mapBox.y + mapBox.height / 2 + (my(lat) - (north + south) / 2) * scale,
-    };
-  }
-  const facility = screen(106.827, -6.18);
-  await page.mouse.click(facility.x, facility.y);
-  await page.locator(".gis-popup").waitFor({ timeout: 10000 });
+  await page.getByText("No GIS layers available.", { exact: true }).waitFor();
+  const catalog = await page.request.get(`${baseUrl}/api/layers`);
   ensure(
-    (await page.locator(".gis-popup").textContent()).includes(
-      "Operations office",
-    ),
-    "popup attributes missing",
+    (await catalog.json()).layers.length === 0,
+    "fresh database contains layers",
   );
-  await page.locator(".maplibregl-popup-close-button").click();
-  const facilities = page.getByRole("checkbox", { name: /Demo · Facilities/ });
-  await facilities.uncheck();
-  ensure(
-    (await page.locator(".gis-legend").textContent()).includes("Facilities") ===
-      false,
-    "hidden layer remains in legend",
-  );
-  await facilities.check();
+  const facility = {
+    x: mapBox.x + mapBox.width / 2,
+    y: mapBox.y + mapBox.height / 2,
+  };
   let externalTiles = 0;
   await page.route("https://tile.openstreetmap.org/**", async (route) => {
     externalTiles++;
@@ -340,8 +319,140 @@ try {
     new URL(page.url()).pathname === "/access-denied",
     "revoked viewer can access map",
   );
+  // Use isolated database sessions to exercise the real production routes/actions;
+  // Google itself is not mocked inside the application.
+  await adminContext.clearCookies();
+  await adminContext.addCookies([
+    {
+      name: "authjs.session-token",
+      value: administrator.token,
+      url: baseUrl,
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${baseUrl}/admin`);
+  await page
+    .getByRole("heading", { name: "Administration", exact: true })
+    .waitFor();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Administration sections" })
+      .getByRole("link", { name: "Users", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: `${screenshots}/admin-dashboard.png`,
+    fullPage: true,
+  });
+  await page.getByRole("link", { name: "Manage users", exact: true }).click();
+  await page
+    .getByRole("heading", { name: "User management", exact: true })
+    .waitFor();
+  await expect(
+    page.getByText("Protected administrator", { exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: `${screenshots}/admin-users.png`,
+    fullPage: true,
+  });
+  await page.getByLabel("Search", { exact: true }).fill(applicant.email);
+  await page
+    .getByRole("button", { name: "Apply filters", exact: true })
+    .click();
+  await page.waitForURL((url) => url.searchParams.get("q") === applicant.email);
+  await expect(page.locator(".users-table tbody tr")).toHaveCount(1);
+  const row = page.locator(".users-table tbody tr");
+  await row.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.waitForURL((url) => url.searchParams.get("result") === "approved");
+  await expect(
+    page.getByText("Account approved. Access is available immediately."),
+  ).toBeVisible();
+  const approved = (
+    await owner.query(
+      "SELECT status,role,approved_by,approved_at FROM app.users WHERE id=$1",
+      [applicant.id],
+    )
+  ).rows[0];
+  ensure(
+    approved.status === "APPROVED" &&
+      approved.role === "VIEWER" &&
+      approved.approved_by === administrator.id &&
+      approved.approved_at,
+    "approval attribution missing",
+  );
+  const viewerContext = await browser.newContext();
+  await viewerContext.addCookies([
+    {
+      name: "authjs.session-token",
+      value: applicant.token,
+      url: baseUrl,
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  const viewerPage = await viewerContext.newPage();
+  await viewerPage.goto(`${baseUrl}/map`);
+  await viewerPage
+    .getByText("No GIS layers available.", { exact: true })
+    .waitFor();
+  await viewerPage.goto(`${baseUrl}/admin/users`);
+  ensure(
+    new URL(viewerPage.url()).pathname === "/access-denied",
+    "viewer entered user management",
+  );
+  await row.getByRole("combobox").selectOption("ADMIN");
+  page.once("dialog", (dialog) => dialog.accept());
+  await row.getByRole("button", { name: "Save role", exact: true }).click();
+  await page.waitForURL((url) => url.searchParams.get("result") === "role");
+  await viewerPage.goto(`${baseUrl}/admin/users`);
+  await viewerPage
+    .getByRole("heading", { name: "User management", exact: true })
+    .waitFor();
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await row.getByRole("button", { name: "Reject", exact: true }).click();
+  ensure(
+    (
+      await owner.query("SELECT status FROM app.users WHERE id=$1", [
+        applicant.id,
+      ])
+    ).rows[0].status === "APPROVED",
+    "cancel did not prevent rejection",
+  );
+  page.once("dialog", (dialog) => dialog.accept());
+  await row.getByRole("button", { name: "Reject", exact: true }).click();
+  await page.waitForURL((url) => url.searchParams.get("result") === "rejected");
+  await expect(
+    page.getByText("Account rejected. Existing sessions have been revoked."),
+  ).toBeVisible();
+  await viewerPage.goto(`${baseUrl}/map`);
+  ensure(
+    new URL(viewerPage.url()).pathname === "/login",
+    "rejection failed to revoke session",
+  );
+  await viewerContext.close();
+  await page.locator('.user-filters select[name="status"]').selectOption("PENDING");
+  await page
+    .getByRole("button", { name: "Apply filters", exact: true })
+    .click();
+  await page
+    .getByRole("heading", { name: "No users match these filters" })
+    .waitFor();
+  await page.goto(`${baseUrl}/admin/users`);
+  await page.setViewportSize({ width: 390, height: 844 });
+  ensure(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    "users mobile overflow",
+  );
+  await page.screenshot({
+    path: `${screenshots}/admin-mobile.png`,
+    fullPage: true,
+  });
+  ensure(browserErrors.length === 0, "admin browser runtime error");
   console.log(
-    "PASS: fullscreen/zoom, mocked OSM tile loading + attribution, real WebGL map and MVT, popup attributes, layer/legend toggles, basemap switching, pointer coordinates, line length/unit conversion, draggable vertices, polygon area/two decimals/undo/clear, mobile layout, revoked access.",
+    "PASS: empty WebGL map, controls, basemaps, measurements, mobile, revoked access; admin dashboard/users, filters, approval attribution, role promotion, rejected/cancel confirmation, session revocation, viewer protection and protected administrator UI.",
   );
 } catch (error) {
   const failedPage = browser?.contexts()[0]?.pages()[0];

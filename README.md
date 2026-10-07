@@ -1,8 +1,8 @@
-# Company GIS Portal — Phase 1 & GIS Viewer
+# Company GIS Portal — Phase 3
 
 Portal internal dengan login Google, persetujuan akun, dan akses berdasarkan role. Phase 1 mencakup Next.js + TypeScript, Tailwind CSS, PostgreSQL + PostGIS, Drizzle ORM/migration, Docker Compose, serta authentication dan authorization di server.
 
-Phase 2 **GIS Viewer** kini tersedia di `/map` menggunakan MapLibre GL JS, vector tile PostGIS, panel layer/basemap/legenda, popup atribut, dan pengukuran. Sesuai permintaan lanjutan, `/admin` kini menyediakan **Account approvals** untuk menyetujui akun baru sebagai VIEWER melalui browser, serta **Approved accounts** untuk melihat akun yang telah disetujui dan status online/offline. Upload SHP/raster, worker GIS, serta antarmuka perubahan role dan penolakan akun belum dibuat. Cakupan fondasi mengikuti instruksi Phase 1 pengguna; penomoran awal di [PLAN.md](PLAN.md) memisahkan authentication menjadi fase tersendiri.
+Phase 2 **GIS Viewer** kini tersedia di `/map` menggunakan MapLibre GL JS, vector tile PostGIS, panel layer/basemap/legenda, popup atribut, dan pengukuran. Sesuai permintaan lanjutan, `/admin` kini menyediakan **Account approvals** untuk menyetujui akun baru sebagai VIEWER melalui browser, serta **Approved accounts** untuk melihat akun yang telah disetujui dan status online/offline. Phase 3 menambahkan dashboard dan `/admin/users` untuk approve, reject, perubahan role, filter dan pencarian. Upload SHP/raster dan worker GIS belum dibuat. Cakupan fondasi mengikuti instruksi Phase 1 pengguna; penomoran awal di [PLAN.md](PLAN.md) memisahkan authentication menjadi fase tersendiri.
 
 ## Menjalankan development
 
@@ -69,7 +69,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 
 Sesuaikan kedua connection URL bila nama database atau port diubah. Password hex dari perintah di atas aman dipakai langsung dalam URL; password lain harus di-URL-encode. Compose membuat URL koneksi internalnya sendiri dengan hostname `db` dari variabel database; aplikasi yang dijalankan menggunakan `npm` memakai URL `localhost`.
 
-`gis_app` mempunyai hak terhadap tabel akun dan sesi serta hanya `SELECT/INSERT` terhadap audit. `gis_owner` dipakai untuk migration, bukan runtime web. Migration mengaktifkan PostGIS serta membuat katalog layer dan tiga tabel data demo GIS dengan hak baca untuk runtime.
+`gis_app` mempunyai hak terhadap tabel akun dan sesi serta hanya `SELECT/INSERT` terhadap audit. `gis_owner` dipakai untuk migration, bukan runtime web. Migration mengaktifkan PostGIS dan katalog layer kosong dengan hak baca untuk runtime.
 
 `.env` diabaikan Git dan Docker build. Simpan credential di konfigurasi privat; jangan memasukkannya ke screenshot, commit, atau README. Mengubah password dalam `.env` tidak otomatis mengubah password role pada volume PostgreSQL yang sudah dibuat; perubahan tersebut memerlukan rotasi password database yang sesuai.
 
@@ -254,7 +254,7 @@ Simpan backup di tempat privat di luar repository karena memuat akun dan sesi. U
 | `tests/`, `vitest*.ts` | Unit test dan integration test. |
 | `.env.example` | Daftar konfigurasi tanpa credential nyata. |
 | `next.config.ts`, `tsconfig.json`, `postcss.config.mjs`, `eslint.config.mjs` | Konfigurasi Next.js, TypeScript, Tailwind/PostCSS, dan lint. |
-| `PLAN.md` | Rancangan jangka panjang; fitur GIS di dalamnya belum diimplementasikan. |
+| `PLAN.md` | Rancangan jangka panjang dan status implementasi Phase 1–3. |
 
 
 ## Daftar approved dan status online
@@ -278,9 +278,9 @@ npm run db:migrate
 npm run dev
 ```
 
-Migration `0003_gis_viewer.sql` membuat `app.layers` sesuai model PLAN: type/source/state, style, visibility, uploader, timestamps, SRID/CRS, jumlah fitur, bbox PostGIS, serta metadata penyimpanan. Tiga layer demo sintetis sekitar Jakarta otomatis tersedia: **Work areas** (polygon), **Operating routes** (line), dan **Facilities** (point). Migration dicatat satu kali sehingga menjalankannya kembali tidak menggandakan data. Demo ditandai `storage_metadata.demo=true` dan boleh memiliki `uploaded_by=NULL` sebagai data sistem; layer lain tetap wajib mempunyai uploader. Tidak ada akun palsu/admin baru yang dibuat untuk seed.
+Migration `0003_gis_viewer.sql` membuat `app.layers` sesuai model PLAN: type/source/state, style, visibility, uploader, timestamps, SRID/CRS, jumlah fitur, bbox PostGIS, serta metadata penyimpanan. Instalasi baru tidak membuat layer atau akun contoh. `/map` menampilkan **No GIS layers available.** sampai tersedia data perusahaan.
 
-Geometri disimpan di tiga tabel `gis.layer_<uuid>` dengan primary key dan index GiST. Runtime `gis_app` hanya mendapat SELECT pada katalog dan tabel GIS. Trigger menjaga `updated_at`; migration menggunakan role pemilik database. Nama tabel dan storage metadata tidak dikirim ke browser. Enum RASTER/SHP disiapkan sesuai model PLAN, tetapi belum ada upload, importer, API raster, atau worker.
+Layanan vector tile tetap mendukung tabel `gis.layer_<uuid>` dengan primary key dan index GiST. Runtime `gis_app` hanya mendapat SELECT pada katalog dan tabel GIS. Trigger menjaga `updated_at`; migration menggunakan role pemilik database. Nama tabel dan storage metadata tidak dikirim ke browser. Enum RASTER/SHP disiapkan sesuai model PLAN, tetapi belum ada upload, importer, API raster, atau worker.
 
 ### Menggunakan viewer
 
@@ -306,7 +306,7 @@ Tile menggunakan `ST_TileEnvelope`, spatial prefilter/index, `ST_AsMVTGeom`, dan
 | `src/lib/gis/` | Tipe nonsecret, basemap allowlist, perhitungan/pemformatan ukuran. |
 | `src/services/layers/` | Guard API, katalog aman, pembacaan tile PostGIS. |
 | `src/app/api/layers/`, `src/app/api/basemaps/` | Endpoint baca yang terproteksi. |
-| `migrations/0003_gis_viewer.sql` | Model layer, grants, trigger, dan data demo. |
+| `migrations/0003_gis_viewer.sql` | Model layer, grants dan trigger; tanpa seed data. |
 
 ### Pengujian Phase 2
 
@@ -320,7 +320,7 @@ npm run test:integration
 
 Unit test memeriksa jarak/luas geografis, konversi satuan dan dua desimal. Integration test memakai database terisolasi: katalog/metadata/tile/basemap tanpa sesi dan dengan PENDING/REJECTED, tile MVT yang benar-benar didekode, hidden/non-READY layer, parameter tile invalid, pencabutan akses, dan role database read-only.
 
-Uji manual memakai akun VIEWER: lihat tiga layer, toggle tiap layer dan legenda, klik fitur, pilih basemap, coba zoom/fullscreen/skala, buat garis/polygon, geser titik, ganti unit dan undo/clear. Ulangi akses langsung ke `/map` serta API GIS dengan akun PENDING dan REJECTED. Script `predev`/`prebuild` menyalin worker MapLibre versi terpasang beserta lisensinya ke `public/vendor/maplibre/` (generated, di-ignore Git). Worker dilayani dari origin aplikasi sendiri sehingga tidak bergantung CDN dan bisa digunakan di Next.js/Turbopack maupun Docker standalone.
+Uji manual memakai akun VIEWER: pastikan panel layer kosong tanpa error, pilih basemap, coba zoom/fullscreen/skala, buat garis/polygon, geser titik, ganti unit dan undo/clear. Toggle/legenda/popup tetap tersedia untuk layer perusahaan; fixture vector tile hanya dibuat di database pengujian terisolasi. Ulangi akses langsung ke `/map` serta API GIS dengan akun PENDING dan REJECTED. Script `predev`/`prebuild` menyalin worker MapLibre versi terpasang beserta lisensinya ke `public/vendor/maplibre/` (generated, di-ignore Git). Worker dilayani dari origin aplikasi sendiri sehingga tidak bergantung CDN dan bisa digunakan di Next.js/Turbopack maupun Docker standalone.
 
 Browser memerlukan WebGL; bila map gagal dimulai, aktifkan hardware acceleration atau gunakan browser yang mendukung. Jika tile OSM tidak dapat diakses, pilih Light/Dark canvas; data GIS internal tetap dapat ditampilkan.
 
@@ -332,4 +332,65 @@ npx playwright install chromium
 npm run test:gis
 ```
 
-Runner membuat database sementara sendiri dan menghapusnya setelah selesai. Ia menguji WebGL/worker lokal, popup MVT, checkbox/legenda, basemap/attribution, fullscreen/zoom, pengukuran dan pergeseran titik, mobile, serta pencabutan akses. Respons tile OSM dimock hanya pada browser test agar suite deterministik; data GIS internal menggunakan PostGIS nyata. Screenshot disimpan di `test-results/gis/`. Jika Chromium telah tersedia di lokasi lain, gunakan `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+Runner membuat database sementara sendiri dan menghapusnya setelah selesai. Ia menguji peta kosong dengan WebGL/worker lokal, basemap/attribution, fullscreen/zoom, pengukuran dan pergeseran titik, mobile, pencabutan akses, serta dashboard/manajemen user melalui browser. Respons tile OSM dimock hanya pada browser test agar suite deterministik; uji API vector tile memakai fixture PostGIS nyata pada suite integration. Screenshot disimpan di `test-results/gis/`. Jika Chromium telah tersedia di lokasi lain, gunakan `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+
+
+## Phase 3 — Dashboard dan manajemen pengguna
+
+Buka **Administration → Users** (`/admin/users`) sebagai APPROVED ADMIN. Dashboard `/admin` menyediakan jumlah total/PENDING/APPROVED/REJECTED/admin, shortcut filter, quick approval dan daftar approved beserta aktivitas online/offline yang sudah ada. Menu **Layers** dan **Upload Data** masih nonaktif.
+
+Tabel Users menampilkan nama, email, status, role, waktu pendaftaran, administrator pemberi approval, waktu approval, dan tindakan. Tanggal memakai WIB; semua waktu disimpan sebagai timestamptz. Filter status/role serta pencarian nama/email dilakukan di server dengan 20 akun per halaman. Approved By menampilkan **System / unavailable** bila akun tidak memiliki atribusi administrator manusia; informasi historis tidak direkayasa.
+
+- **Approve**: berlaku untuk PENDING atau REJECTED. Status menjadi APPROVED, `approved_by` berasal dari sesi admin, dan `approved_at` dicatat. Role awal tetap VIEWER; jika admin secara eksplisit mengubah role sebelumnya, role tersebut dipertahankan. Approval untuk role ADMIN meminta konfirmasi.
+- **Reject**: meminta konfirmasi, mengubah status menjadi REJECTED, mengosongkan metadata approval, dan mencabut semua sesi akun itu. Saat login Google kembali, akun diarahkan ke `/access-denied`. Riwayat keputusan tetap ada dalam tabel audit yang sudah tersedia.
+- **Save role**: memilih VIEWER/ADMIN dan meminta konfirmasi. Perubahan role langsung berlaku pada request berikutnya, termasuk sesi yang sudah terbuka. Perubahan role tidak mengganti atribusi/waktu approval.
+- Formulir yang sudah kedaluwarsa ditolak ketika akun telah berubah. Review ulang data yang diperbarui sebelum mengulangi tindakan.
+- Akun dalam `SUPER_ADMIN_EMAILS` diberi label **Protected administrator**; server menolak penolakan/demotion. Admin approved terakhir juga tidak boleh ditolak/didemote, termasuk diri sendiri dan dua request bersamaan. Admin boleh menurunkan role sendiri jika ada admin approved lain; setelah itu halaman admin tidak lagi bisa dibuka.
+
+### Migration pembersihan GIS
+
+Jalankan `npm run db:migrate` setelah update kode. `0004_remove_gis_demo.sql` hanya menghapus tiga ID/tabel demo bawaan lama bila **ID, nama tabel, source GEOJSON, penanda demo, dan uploader NULL semuanya cocok**. Layer lain dan seluruh user/sesi/audit dipertahankan. Migration tidak menggunakan CASCADE, tidak mereset database, serta tidak membuat ulang demo.
+
+Atas permintaan penghapusan seed, bagian INSERT/geometri contoh pada migration `0003` juga dihapus agar instalasi baru langsung kosong. Schema historis dan snapshot tetap tersedia; database yang sudah menerapkan `0003` dibersihkan oleh migration maju `0004`. Ini pengecualian terarah terhadap pedoman tidak mengubah migration lama; tidak perlu menghapus volume atau menjalankan ulang `0003`. Constraint uploader khusus demo diganti dengan uploader nullable untuk layer yang dikelola sistem; alur upload di fase berikutnya harus merekam uploader terautentikasi. Tidak ada perubahan schema user atau tabel user duplikat.
+
+Referensi `demo` yang masih ada hanya untuk identifikasi cleanup, metadata migration historis, dokumentasi upgrade, dan assertion pengujian. `mock`/fixture pada automated test tetap diperlukan dan hanya dibuat di database sementara. Tidak ada seed demo pada startup, build, atau migrasi instalasi baru.
+
+### Struktur dan keamanan
+
+| File | Tanggung jawab |
+| --- | --- |
+| `src/app/admin/page.tsx` | Dashboard, statistik, navigasi, quick approval dan presence. |
+| `src/app/admin/users/page.tsx` | Tabel pengguna, filter, pencarian, pagination, metadata approval. |
+| `src/app/admin/users/actions.ts` | Server Action `changeUser`: approve/reject/role, validasi form dan pesan aman. |
+| `src/components/admin/` | Navigasi admin dan kontrol perubahan dengan konfirmasi. |
+| `src/server/users/management.ts` | Query daftar/statistik, transaksi perubahan, pemeriksaan actor/target dan perlindungan admin. |
+| `src/lib/users/management.ts` | Validasi input, normalisasi filter, URL internal dan daftar pesan error. |
+| `migrations/0004_remove_gis_demo.sql` | Cleanup terarah dan penghapusan constraint khusus demo. |
+| `tests/integration/user-management.test.ts` | Uji database, race admin terakhir, rollback audit, pencarian dan cleanup. |
+| `tests/integration/routes.test.ts` | Uji halaman dan POST Server Actions pada build production. |
+| `scripts/test-gis-browser.mjs` | Runtime peta kosong dan alur administrasi dengan browser Chromium. |
+
+Tidak ada API publik CRUD pengguna baru. Tindakan menggunakan Server Actions dengan `requireAdmin()`, validasi ulang actor APPROVED/ADMIN dan Google account yang tertaut **di dalam transaksi**, serta pemeriksaan origin bawaan Next.js. UUID/action/role divalidasi; identitas administrator tidak diambil dari form. Lock transaksi yang sama dipakai oleh bootstrap, quick approval dan CLI sehingga pengecekan admin terakhir tidak bisa dilampaui oleh request paralel. Perubahan user, pencabutan sesi, dan penambahan audit bersifat atomik. Error database/SQL/credential tidak dikirim sebagai pesan ke pengguna.
+
+### Cara menguji Phase 3
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run test:integration
+npm run test:gis
+```
+
+Semua fixture otomatis dibuat di database `portal_test_<acak>` terpisah dan dibuang seusai pengujian. Tidak perlu seed akun di database aplikasi.
+
+1. Login Google sebagai admin, buka `/admin` lalu **Users**. Periksa filter, pencarian, pagination, statistik, daftar approved dan indikator aktivitas.
+2. Login akun Google kedua → PENDING. Dari Users, approve akun tersebut. Refresh `/pending` di browser akun kedua → `/map` tanpa login ulang; periksa role VIEWER dan atribusi/tanggal approval.
+3. Sebagai VIEWER, buka `/admin` dan `/admin/users` langsung → `/access-denied`. Coba `/map` → map kosong tetap dapat dipakai, dengan basemap, koordinat dan pengukuran.
+4. Promosikan akun kedua menjadi ADMIN, konfirmasi, lalu buka `/admin/users` pada sesi akun kedua yang sama → dapat diakses. Turunkan kembali ke VIEWER → akses admin ditolak pada request berikutnya.
+5. Klik Reject lalu batalkan: akun tidak berubah. Ulangi dan konfirmasi: sesi akun kedua dicabut. Login Google lagi → `/access-denied`. Akun bisa di-approve kembali dari filter Rejected.
+6. Coba demote/reject admin terakhir atau akun konfigurasi bootstrap: server menolak. Pengujian otomatis juga mencoba POST manual dengan role/status yang tidak berhak serta dua demotion bersamaan.
+7. Pada database lama, setelah migration, pastikan tiga layer contoh hilang dan akun/data perusahaan tetap ada. Pada database baru, pastikan tidak ada layer yang dibuat otomatis.
+
+Login Google nyata tetap memerlukan credential dan redirect URI milik lingkungan Anda. Browser test otomatis memakai sesi terisolasi, bukan menghubungi Google, dan tidak menambahkan login bypass ke aplikasi. Tidak ada upload/import SHP/GeoTIFF, GDAL, styling editor, advanced layer management, atau audit system baru dalam Phase 3.

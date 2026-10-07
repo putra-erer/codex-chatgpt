@@ -118,8 +118,8 @@ export default function MapCanvas(props: Props) {
       );
       map = new maplibregl.Map({
         container: container.current,
-        center: [106.832, -6.191],
-        zoom: 12.5,
+        center: [0, 0],
+        zoom: 1,
         maxZoom: 20,
         style: {
           version: 8,

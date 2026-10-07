@@ -30,7 +30,7 @@ const MapCanvas = dynamic(() => import("./map-canvas"), {
     </div>
   ),
 });
-const demoBounds: Bounds = [106.809, -6.22, 106.854, -6.16];
+const worldBounds: Bounds = [-170, -60, 170, 75];
 export function GISViewer() {
   const [layers, setLayers] = useState<MapLayer[]>([]),
     [basemaps, setBasemaps] = useState<Basemap[]>([]);
@@ -47,7 +47,7 @@ export function GISViewer() {
   const [lengthUnit, setLengthUnit] = useState<LengthUnit>("m"),
     [areaUnit, setAreaUnit] = useState<AreaUnit>("ha");
   const [fit, setFit] = useState<{ bounds: Bounds; revision: number }>({
-    bounds: demoBounds,
+    bounds: worldBounds,
     revision: 0,
   });
   const [revoked, setRevoked] = useState(false);
@@ -158,7 +158,7 @@ export function GISViewer() {
         </button>
         <div className="gis-toolbar-title">
           <h1>GIS Viewer</h1>
-          <span>Jakarta · Demo workspace</span>
+          <span>Company spatial workspace</span>
         </div>
         <div className="gis-tools" role="group" aria-label="Map tools">
           <button
@@ -190,7 +190,7 @@ export function GISViewer() {
             className="gis-tool"
             onClick={() =>
               setFit((previous) => ({
-                bounds: demoBounds,
+                bounds: worldBounds,
                 revision: previous.revision + 1,
               }))
             }
@@ -209,7 +209,7 @@ export function GISViewer() {
           <div className="gis-sidebar-intro">
             <span className="eyebrow">Workspace data</span>
             <p>
-              Synthetic layers to explore the viewer. Click a feature to see its
+              Explore your organization’s layers. Click a feature to see its
               attributes.
             </p>
           </div>
@@ -259,7 +259,7 @@ export function GISViewer() {
           <div className="gis-sidebar-foot">
             WGS 84 · EPSG:4326
             <br />
-            Demo data is illustrative, not surveyed.
+            Select a basemap and explore your workspace.
           </div>
         </aside>
         <section className="gis-map-stage" aria-label="Map workspace">
@@ -306,7 +306,6 @@ export function GISViewer() {
           <div className="gis-map-label">
             <span className="badge-dot" />
             {shown.length} visible layers
-            <span className="gis-demo-tag">DEMO</span>
           </div>
           {mode !== "none" && (
             <div className="gis-measure-floating">

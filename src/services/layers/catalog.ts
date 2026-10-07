@@ -28,7 +28,6 @@ const fields = {
   featureCount: layers.featureCount,
   style: layers.styleJson,
   isVisible: layers.isVisible,
-  demo: sql<boolean>`coalesce((${layers.storageMetadata}->>'demo')::boolean, false)`,
   bounds: sql<Bounds>`json_build_array(ST_XMin(${layers.bbox}::box3d), ST_YMin(${layers.bbox}::box3d), ST_XMax(${layers.bbox}::box3d), ST_YMax(${layers.bbox}::box3d))`,
 };
 function dto(row: Record<string, unknown>): MapLayer {
@@ -42,7 +41,6 @@ function dto(row: Record<string, unknown>): MapLayer {
     featureCount: Number(row.featureCount ?? 0),
     bounds: row.bounds as Bounds,
     style: styleSchema.parse(row.style),
-    demo: Boolean(row.demo),
     isVisible: Boolean(row.isVisible),
   };
 }

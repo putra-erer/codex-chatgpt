@@ -122,7 +122,7 @@ export const layers = appSchema.table("layers", {
   sourceCrsWkt: text("source_crs_wkt"),
   styleJson: jsonb("style_json").$type<Record<string, unknown>>().notNull().default({}),
   isVisible: boolean("is_visible").notNull().default(true),
-  // System demo layers have no human uploader; imported layers will require one.
+  // Nullable for system-managed layers; future upload flows must record their actor.
   uploadedBy: uuid("uploaded_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -138,7 +138,6 @@ export const layers = appSchema.table("layers", {
   check("layers_count_positive", sql`${table.featureCount} IS NULL OR ${table.featureCount} >= 0`),
   check("layers_style_object", sql`jsonb_typeof(${table.styleJson}) = 'object'`),
   check("layers_metadata_object", sql`jsonb_typeof(${table.storageMetadata}) = 'object'`),
-  check("layers_uploader_or_demo", sql`${table.uploadedBy} IS NOT NULL OR (${table.storageMetadata}->>'demo' = 'true' AND ${table.sourceType} = 'GEOJSON') IS TRUE`),
   check("layers_table_name", sql`${table.tableName} IS NULL OR ${table.tableName} ~ '^layer_[0-9a-f]{32}$'`),
   check("layers_source_consistent", sql`(${table.layerType} = 'VECTOR' AND ${table.sourceType} IN ('SHP','GEOJSON','POSTGIS') AND ${table.tableName} IS NOT NULL) OR (${table.layerType} = 'RASTER' AND ${table.sourceType} = 'GEOTIFF' AND ${table.tableName} IS NULL AND ${table.filePath} IS NOT NULL)`),
   check("layers_ready_bbox", sql`${table.state} <> 'READY' OR ${table.bbox} IS NOT NULL`),
