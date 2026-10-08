@@ -1,4 +1,4 @@
-import { getVectorTile } from "@/services/layers/catalog";
+import { getVectorTile, VectorTileLimitError } from "@/services/layers/catalog";
 import {
   gisUser,
   gisError,
@@ -30,7 +30,11 @@ export async function GET(
         "Content-Type": "application/vnd.mapbox-vector-tile",
       },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof VectorTileLimitError) {
+      return gisError(error.code === "TILE_TIMEOUT" ? 503 : 422, error.code,
+        "This tile exceeds the map delivery limit. Zoom in or ask an administrator to split the dataset.");
+    }
     return gisUnavailable();
   }
 }

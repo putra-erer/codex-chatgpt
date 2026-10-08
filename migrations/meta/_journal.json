@@ -36,6 +36,13 @@
       "when": 1791348153755,
       "tag": "0004_remove_gis_demo",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791364821736,
+      "tag": "0005_vector_upload_jobs",
+      "breakpoints": true
     }
   ]
 }

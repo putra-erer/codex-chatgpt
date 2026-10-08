@@ -1,5 +1,6 @@
 "use client";
 import type { MapLayer } from "@/lib/gis/types";
+import { geometryFamily } from "@/lib/gis/types";
 export function LayerPanel({
   layers,
   visible,
@@ -31,12 +32,12 @@ export function LayerPanel({
                 onChange={() => onToggle(layer.id)}
               />
               <span
-                className={`gis-symbol symbol-${layer.geometryType}`}
+                className={`gis-symbol symbol-${geometryFamily(layer.geometryType)}`}
                 style={{ color: layer.style.color }}
                 aria-hidden="true"
               />
               <span>
-                <strong>{layer.name}</strong>
+                <strong title={layer.description || layer.name}>{layer.name}</strong>
                 <small>
                   {layer.geometryType} · {layer.featureCount} features
                   {!layer.isVisible ? " · Admin preview" : ""}

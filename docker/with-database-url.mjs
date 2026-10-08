@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 
 const [target, command, ...args] = process.argv.slice(2);
-if (!["DATABASE_URL", "MIGRATION_DATABASE_URL"].includes(target) || !command) {
+if (!["DATABASE_URL", "MIGRATION_DATABASE_URL", "GIS_WORKER_DATABASE_URL"].includes(target) || !command) {
   console.error("Invalid database entrypoint invocation.");
   process.exit(1);
 }

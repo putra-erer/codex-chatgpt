@@ -1,4 +1,5 @@
 import type { MapLayer } from "@/lib/gis/types";
+import { geometryFamily } from "@/lib/gis/types";
 export function LegendPanel({ layers }: { layers: MapLayer[] }) {
   return (
     <section className="gis-panel" aria-labelledby="legend-title">
@@ -8,7 +9,7 @@ export function LegendPanel({ layers }: { layers: MapLayer[] }) {
           {layers.map((layer) => (
             <li key={layer.id}>
               <span
-                className={`gis-symbol symbol-${layer.geometryType}`}
+                className={`gis-symbol symbol-${geometryFamily(layer.geometryType)}`}
                 style={{
                   color: layer.style.color,
                   opacity: Math.max(0.5, layer.style.opacity),

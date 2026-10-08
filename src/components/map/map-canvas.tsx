@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as LibreMap, Marker } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
+import { geometryFamily } from "@/lib/gis/types";
 import type {
   Basemap,
   Bounds,
@@ -39,7 +40,7 @@ function addLayer(map: LibreMap, layer: MapLayer) {
     maxzoom: 18,
   });
   const base = { id, source: id, "source-layer": "features" };
-  if (layer.geometryType === "Point")
+  if (geometryFamily(layer.geometryType) === "Point")
     map.addLayer(
       {
         ...base,
@@ -54,7 +55,7 @@ function addLayer(map: LibreMap, layer: MapLayer) {
       },
       "measure-fill",
     );
-  else if (layer.geometryType === "LineString")
+  else if (geometryFamily(layer.geometryType) === "LineString")
     map.addLayer(
       {
         ...base,
@@ -89,7 +90,8 @@ function popupContent(layer: MapLayer, properties: Record<string, unknown>) {
   title.textContent = layer.name;
   content.append(title);
   const list = document.createElement("dl");
-  for (const [key, value] of Object.entries(properties).slice(0, 30)) {
+  const reserved = /^(?:_.*|geom(?:etry)?|wkb_geometry|ogc_fid|gid|fid|table_name|file_path|storage_metadata|uploaded_by|source_srid|source_crs_wkt|.*(?:password|secret|token|credential|connection_string))$/i;
+  for (const [key, value] of Object.entries(properties).filter(([key]) => !reserved.test(key)).slice(0, 30)) {
     const name = document.createElement("dt"),
       item = document.createElement("dd");
     name.textContent = key;
@@ -97,6 +99,11 @@ function popupContent(layer: MapLayer, properties: Record<string, unknown>) {
     list.append(name, item);
   }
   content.append(list);
+  if (!list.childElementCount) {
+    const empty = document.createElement("p");
+    empty.textContent = "No attributes available.";
+    content.append(empty);
+  }
   return content;
 }
 export default function MapCanvas(props: Props) {

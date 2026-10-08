@@ -1,0 +1,40 @@
+export class GISProcessingError extends Error {
+  constructor(public readonly code: string) { super(code); this.name = "GISProcessingError"; }
+}
+const messages: Record<string, string> = {
+  INVALID_UPLOAD: "Upload harus berisi satu file ZIP Shapefile dan metadata yang valid.",
+  UPLOAD_TOO_LARGE: "Ukuran upload melebihi batas yang diizinkan.",
+  UPLOAD_TIMEOUT: "Upload terlalu lama. Periksa koneksi dan coba kembali.",
+  STORAGE_ERROR: "Penyimpanan upload sementara tidak tersedia. Hubungi administrator.",
+  INVALID_ARCHIVE: "File ZIP kosong, rusak, atau tidak valid.",
+  UNSAFE_ARCHIVE: "ZIP berisi path, file, atau format yang tidak diizinkan.",
+  ARCHIVE_LIMIT: "Jumlah file, ukuran ekstraksi, atau rasio kompresi ZIP melebihi batas.",
+  MISSING_SHP: "File .shp tidak ditemukan dalam ZIP.",
+  MISSING_SHX: "File .shx dengan nama dataset yang sama tidak ditemukan.",
+  MISSING_DBF: "File .dbf dengan nama dataset yang sama tidak ditemukan.",
+  MISSING_PRJ: "Coordinate Reference System tidak dapat dikenali. Pastikan file .prj tersedia.",
+  MULTIPLE_SHAPEFILES: "Upload hanya satu dataset Shapefile dengan pasangan nama file yang sama.",
+  INVALID_METADATA: "Isi nama layer (maksimal 200 karakter), deskripsi (maksimal 2000 karakter), dan visibility yang valid.",
+  UNKNOWN_CRS: "Coordinate Reference System tidak dapat dikenali. Periksa file .prj.",
+  INVALID_GEOMETRY: "Dataset berisi geometry kosong, tidak valid, atau di luar koordinat yang didukung.",
+  UNSUPPORTED_GEOMETRY: "Tipe geometry tidak didukung. Gunakan Point, LineString, Polygon, atau versi Multi.",
+  EMPTY_DATASET: "Shapefile tidak memiliki fitur yang dapat diimpor.",
+  FEATURE_LIMIT: "Jumlah fitur melebihi batas import yang diizinkan.",
+  GDAL_UNAVAILABLE: "GDAL tidak tersedia pada worker. Hubungi administrator.",
+  GDAL_FAILED: "Shapefile tidak dapat dibaca atau diimpor. Periksa dataset dan proyeksinya.",
+  PROCESS_TIMEOUT: "Pemrosesan melebihi batas waktu. Gunakan dataset yang lebih kecil.",
+  IMPORT_FAILED: "Import ke PostGIS gagal. Periksa dataset atau hubungi administrator.",
+  DATABASE_UNAVAILABLE: "Database tidak tersedia. Coba kembali setelah koneksi pulih.",
+  FORBIDDEN: "Akses administrator yang disetujui diperlukan.",
+  INVALID_ID: "ID layer atau pekerjaan tidak valid.",
+  NOT_FOUND: "Layer atau pekerjaan tidak ditemukan.",
+  NOT_MANAGED: "Layer ini tidak dikelola melalui upload Shapefile aplikasi.",
+  DUPLICATE_NAME: "Nama layer sudah digunakan. Pilih nama yang berbeda.",
+  LAYER_BUSY: "Layer sedang diproses. Tunggu hingga pekerjaan selesai.",
+  QUEUE_FULL: "Antrean upload penuh atau masih ada upload Anda yang diproses. Coba kembali nanti.",
+  JOB_EXPIRED: "Pemrosesan terhenti sebelum selesai. Silakan upload ulang.",
+  STALE_JOB: "Pekerjaan telah kedaluwarsa dan tidak dapat dipublikasikan.",
+};
+export function publicGisError(code: string) {
+  return { code: Object.hasOwn(messages, code) ? code : "IMPORT_FAILED", message: messages[code] ?? messages.IMPORT_FAILED };
+}

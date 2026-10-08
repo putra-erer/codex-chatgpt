@@ -7,7 +7,7 @@ import { Client } from "pg";
 
 config({ path: [".env.local", ".env"], quiet: true });
 
-function databaseUrl(name: "DATABASE_URL" | "MIGRATION_DATABASE_URL") {
+function databaseUrl(name: "DATABASE_URL" | "MIGRATION_DATABASE_URL" | "GIS_WORKER_DATABASE_URL") {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required.`);
   const url = new URL(value);
@@ -40,9 +40,12 @@ async function main() {
   });
   const owner = databaseUrl("MIGRATION_DATABASE_URL");
   const app = databaseUrl("DATABASE_URL");
+  const worker = databaseUrl("GIS_WORKER_DATABASE_URL");
   if (owner.hostname !== app.hostname || (owner.port || "5432") !== (app.port || "5432")
-    || decodeURIComponent(app.username) !== "gis_app" || owner.username === app.username) {
-    throw new Error("Use separate migration-owner and gis_app URLs on the same development PostgreSQL server.");
+    || decodeURIComponent(app.username) !== "gis_app" || owner.username === app.username
+    || worker.hostname !== owner.hostname || (worker.port || "5432") !== (owner.port || "5432")
+    || decodeURIComponent(worker.username) !== "gis_worker" || worker.username === owner.username) {
+    throw new Error("Use separate migration-owner, gis_app and gis_worker URLs on the same development PostgreSQL server. Run npm run gis:setup -- --write-env first.");
   }
   // Only this randomly named database is ever migrated, populated, or removed.
   const name = `portal_test_${randomUUID().replaceAll("-", "")}`;
@@ -56,12 +59,14 @@ async function main() {
     await admin.query(`GRANT CONNECT ON DATABASE "${name}" TO gis_app`);
     owner.pathname = `/${name}`;
     app.pathname = `/${name}`;
+    worker.pathname = `/${name}`;
     // Prevent .env or .env.local from replacing the isolated connection strings.
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       NODE_ENV: "test",
       DATABASE_URL: app.toString(),
       MIGRATION_DATABASE_URL: owner.toString(),
+      GIS_WORKER_DATABASE_URL: worker.toString(),
       PORTAL_INTEGRATION_DATABASE: name,
       AUTH_URL: "http://localhost:3000",
       AUTH_SECRET: randomUUID() + randomUUID(),

@@ -1,4 +1,10 @@
 export type Bounds = [number, number, number, number];
+export type GeometryType = "Point" | "MultiPoint" | "LineString" | "MultiLineString" | "Polygon" | "MultiPolygon";
+export function geometryFamily(type: GeometryType): "Point" | "LineString" | "Polygon" {
+  if (type === "Point" || type === "MultiPoint") return "Point";
+  if (type === "LineString" || type === "MultiLineString") return "LineString";
+  return "Polygon";
+}
 export type LayerStyle = {
   color: string;
   opacity: number;
@@ -9,7 +15,7 @@ export type MapLayer = {
   id: string;
   name: string;
   description: string;
-  geometryType: "Point" | "LineString" | "Polygon";
+  geometryType: GeometryType;
   featureCount: number;
   bounds: Bounds;
   style: LayerStyle;

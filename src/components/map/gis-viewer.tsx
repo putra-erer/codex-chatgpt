@@ -1,6 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { LayerPanel } from "@/components/layers/layer-panel";
 import { LegendPanel } from "@/components/layers/legend-panel";
 import { BasemapPanel } from "./basemap-panel";
@@ -51,6 +51,8 @@ export function GISViewer() {
     revision: 0,
   });
   const [revoked, setRevoked] = useState(false);
+  const [catalogRevision, setCatalogRevision] = useState(0);
+  const selectedLayerApplied = useRef(false);
   const unauthorized = useCallback(() => {
     setRevoked(true);
     window.location.replace("/map");
@@ -94,6 +96,15 @@ export function GISViewer() {
           responses.map((response) => response.json()),
         );
         if (stopped) return;
+        if (!selectedLayerApplied.current) {
+          selectedLayerApplied.current = true;
+          const selectedId = new URLSearchParams(window.location.search).get("layer");
+          const selected = (catalog.layers as MapLayer[]).find((layer) => layer.id === selectedId);
+          if (selected) {
+            setVisible((previous) => ({ ...previous, [selected.id]: true }));
+            setFit((previous) => ({ bounds: selected.bounds, revision: previous.revision + 1 }));
+          }
+        }
         setLayers((previous) =>
           JSON.stringify(previous) === JSON.stringify(catalog.layers)
             ? previous
@@ -124,7 +135,7 @@ export function GISViewer() {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [retry, unauthorized]);
+  }, [retry, catalogRevision, unauthorized]);
   function chooseMode(next: MeasureMode) {
     setMode(next);
     setPoints([]);
@@ -190,13 +201,19 @@ export function GISViewer() {
             className="gis-tool"
             onClick={() =>
               setFit((previous) => ({
-                bounds: worldBounds,
+                bounds: layers.length ? [
+                  Math.min(...layers.map((layer) => layer.bounds[0])),
+                  Math.min(...layers.map((layer) => layer.bounds[1])),
+                  Math.max(...layers.map((layer) => layer.bounds[2])),
+                  Math.max(...layers.map((layer) => layer.bounds[3])),
+                ] : worldBounds,
                 revision: previous.revision + 1,
               }))
             }
           >
             Reset view
           </button>
+          <button type="button" className="gis-tool" onClick={() => { setError(null); setCatalogRevision((previous) => previous + 1); }}>Refresh layers</button>
         </div>
       </div>
       <div className="gis-body">

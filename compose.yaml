@@ -30,6 +30,8 @@ services:
       DATABASE_NAME: ${POSTGRES_DB:-company_gis}
       DATABASE_USER: ${POSTGRES_USER:-gis_owner}
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      GIS_WORKER_DB_PASSWORD: ${GIS_WORKER_DB_PASSWORD:-}
+    command: ["sh", "-c", "node_modules/.bin/tsx scripts/migrate.ts && node_modules/.bin/tsx scripts/configure-gis-worker.ts"]
     depends_on:
       db:
         condition: service_healthy
@@ -53,6 +55,13 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET in .env}
       SUPER_ADMIN_EMAILS: ${SUPER_ADMIN_EMAILS:-}
+      GIS_STORAGE_ROOT: /data/gis
+      GIS_UPLOAD_MAX_MB: ${GIS_UPLOAD_MAX_MB:-50}
+      GIS_EXTRACT_MAX_MB: ${GIS_EXTRACT_MAX_MB:-250}
+      GIS_ENTRY_MAX_MB: ${GIS_ENTRY_MAX_MB:-200}
+      GIS_PROCESS_TIMEOUT_SECONDS: ${GIS_PROCESS_TIMEOUT_SECONDS:-300}
+    volumes:
+      - gis_data:/data/gis
     ports:
       - "127.0.0.1:${APP_PORT:-3000}:3000"
     depends_on:
@@ -72,5 +81,39 @@ services:
       - ALL
     restart: unless-stopped
 
+  worker:
+    build:
+      context: .
+      target: worker
+    environment:
+      DATABASE_HOST: db
+      DATABASE_NAME: ${POSTGRES_DB:-company_gis}
+      DATABASE_USER: gis_worker
+      DATABASE_PASSWORD: ${GIS_WORKER_DB_PASSWORD:-}
+      GIS_STORAGE_ROOT: /data/gis
+      GIS_UPLOAD_MAX_MB: ${GIS_UPLOAD_MAX_MB:-50}
+      GIS_EXTRACT_MAX_MB: ${GIS_EXTRACT_MAX_MB:-250}
+      GIS_ENTRY_MAX_MB: ${GIS_ENTRY_MAX_MB:-200}
+      GIS_MAX_FEATURES: ${GIS_MAX_FEATURES:-500000}
+      GIS_PROCESS_TIMEOUT_SECONDS: ${GIS_PROCESS_TIMEOUT_SECONDS:-300}
+    volumes:
+      - gis_data:/data/gis
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    init: true
+    stop_grace_period: 15m
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 64
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  gis_data:

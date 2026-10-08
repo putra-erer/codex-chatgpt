@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  outputFileTracingExcludes: {
+    "/*": ["./.env", "./.env.*", "./data/**/*", "./test-results/**/*"],
+  },
   poweredByHeader: false,
   // Accept the loopback Origin observed through Codespaces only in development.
   experimental:

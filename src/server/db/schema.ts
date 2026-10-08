@@ -14,6 +14,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
@@ -88,7 +89,7 @@ export const userPresence = appSchema.table("user_presence", {
 export const auditLogs = appSchema.table("audit_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
-  action: text("action").notNull().$type<"LOGIN" | "USER_APPROVED" | "USER_REJECTED" | "ROLE_CHANGED">(),
+  action: text("action").notNull().$type<"LOGIN" | "USER_APPROVED" | "USER_REJECTED" | "ROLE_CHANGED" | "LAYER_UPLOADED" | "LAYER_UPDATED" | "LAYER_DELETED">(),
   targetType: text("target_type").notNull().default("user"),
   targetId: text("target_id"),
   timestamp: timestamp("timestamp", { mode: "date", withTimezone: true }).notNull().defaultNow(),
@@ -145,4 +146,30 @@ export const layers = appSchema.table("layers", {
   index("layers_catalog_idx").on(table.state, table.isVisible, table.createdAt),
   index("layers_uploader_idx").on(table.uploadedBy),
   index("layers_bbox_idx").using("gist", table.bbox),
+]);
+
+
+// PostgreSQL-backed vector processing queue. File payloads contain server-generated IDs only.
+export const gisJobs = appSchema.table("gis_jobs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  layerId: uuid("layer_id").references(() => layers.id, { onDelete: "set null" }),
+  actorId: uuid("actor_id").notNull().references(() => users.id),
+  kind: text("kind").notNull().$type<"IMPORT_VECTOR" | "DELETE_LAYER">(),
+  status: text("status").notNull().default("QUEUED").$type<"QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED">(),
+  payload: jsonb("payload").notNull().default({}).$type<Record<string, unknown>>(),
+  attempts: integer("attempts").notNull().default(0),
+  availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  lockedBy: uuid("locked_by"),
+  errorCode: text("error_code"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check("gis_jobs_kind_check", sql`${table.kind} IN ('IMPORT_VECTOR','DELETE_LAYER')`),
+  check("gis_jobs_status_check", sql`${table.status} IN ('QUEUED','RUNNING','SUCCEEDED','FAILED')`),
+  check("gis_jobs_payload_object", sql`jsonb_typeof(${table.payload}) = 'object'`),
+  check("gis_jobs_attempts_check", sql`${table.attempts} BETWEEN 0 AND 3`),
+  index("gis_jobs_claim_idx").on(table.availableAt, table.createdAt).where(sql`${table.status} = 'QUEUED'`),
+  index("gis_jobs_expired_lease_idx").on(table.leaseUntil).where(sql`${table.status} = 'RUNNING'`),
+  uniqueIndex("gis_jobs_active_layer_idx").on(table.layerId).where(sql`${table.status} IN ('QUEUED','RUNNING')`),
 ]);

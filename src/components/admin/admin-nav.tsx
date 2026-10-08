@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export function AdminNav({ current }: { current: "dashboard" | "users" }) {
+export function AdminNav({ current }: { current: "dashboard" | "users" | "layers" | "upload" }) {
   return (
     <nav className="admin-nav" aria-label="Administration sections">
       <Link
@@ -15,12 +15,8 @@ export function AdminNav({ current }: { current: "dashboard" | "users" }) {
       >
         Users
       </Link>
-      <span aria-disabled="true" title="Not available yet">
-        Layers <small>Coming later</small>
-      </span>
-      <span aria-disabled="true" title="Not available yet">
-        Upload Data <small>Coming later</small>
-      </span>
+      <Link href="/admin/layers" aria-current={current === "layers" ? "page" : undefined}>Layers</Link>
+      <Link href="/admin/upload" aria-current={current === "upload" ? "page" : undefined}>Upload Data</Link>
     </nav>
   );
 }
