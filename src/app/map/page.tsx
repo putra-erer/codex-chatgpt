@@ -7,7 +7,7 @@ export default async function MapPage() {
   const user = await requireApprovedUser();
   return (
     <PortalShell user={user} current="map" fullWidth>
-      <GISViewer />
+      <GISViewer key={user.id} userId={user.id} isAdmin={user.role === "ADMIN"} />
     </PortalShell>
   );
 }

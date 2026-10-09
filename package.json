@@ -23,7 +23,8 @@
     "test:gis": "node scripts/test-gis-browser.mjs",
     "gis:setup": "tsx scripts/configure-gis-worker.ts",
     "worker:gis": "tsx scripts/gis-worker.ts",
-    "test:vector": "node scripts/test-vector-browser.mjs"
+    "test:vector": "node scripts/test-vector-browser.mjs",
+    "test:styling": "node scripts/test-vector-browser.mjs --styling"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "1.11.3",

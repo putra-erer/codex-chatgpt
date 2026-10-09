@@ -3,6 +3,8 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LayerPanel } from "@/components/layers/layer-panel";
 import { LegendPanel } from "@/components/layers/legend-panel";
+import { parseVisibilityOverrides, visibilityStorageKey } from "@/components/layers/visibility-state";
+import { validBounds } from "@/lib/gis/style";
 import { BasemapPanel } from "./basemap-panel";
 import { MeasurementPanel } from "./measurement-panel";
 import {
@@ -31,7 +33,7 @@ const MapCanvas = dynamic(() => import("./map-canvas"), {
   ),
 });
 const worldBounds: Bounds = [-170, -60, 170, 75];
-export function GISViewer() {
+export function GISViewer({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
   const [layers, setLayers] = useState<MapLayer[]>([]),
     [basemaps, setBasemaps] = useState<Basemap[]>([]);
   const [visible, setVisible] = useState<Record<string, boolean>>({}),
@@ -53,6 +55,7 @@ export function GISViewer() {
   const [revoked, setRevoked] = useState(false);
   const [catalogRevision, setCatalogRevision] = useState(0);
   const selectedLayerApplied = useRef(false);
+  const storageKey = visibilityStorageKey(userId);
   const unauthorized = useCallback(() => {
     setRevoked(true);
     window.location.replace("/map");
@@ -98,12 +101,24 @@ export function GISViewer() {
         if (stopped) return;
         if (!selectedLayerApplied.current) {
           selectedLayerApplied.current = true;
+          let overrides: Record<string, boolean> = {};
+          try {
+            overrides = parseVisibilityOverrides(window.sessionStorage.getItem(storageKey));
+          } catch {
+            // Private browsing or storage restrictions should not prevent map use.
+          }
           const selectedId = new URLSearchParams(window.location.search).get("layer");
           const selected = (catalog.layers as MapLayer[]).find((layer) => layer.id === selectedId);
           if (selected) {
-            setVisible((previous) => ({ ...previous, [selected.id]: true }));
-            setFit((previous) => ({ bounds: selected.bounds, revision: previous.revision + 1 }));
+            // An explicit local preference survives refresh, including a deep link.
+            if (overrides[selected.id] === undefined) overrides[selected.id] = true;
+            if (validBounds(selected.bounds)) {
+              setFit((previous) => ({ bounds: selected.bounds, revision: previous.revision + 1 }));
+            } else {
+              setError("This layer does not have a valid map extent to zoom to.");
+            }
           }
+          setVisible(overrides);
         }
         setLayers((previous) =>
           JSON.stringify(previous) === JSON.stringify(catalog.layers)
@@ -135,7 +150,34 @@ export function GISViewer() {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [retry, catalogRevision, unauthorized]);
+  }, [retry, catalogRevision, unauthorized, storageKey]);
+  function changeVisibility(next: Record<string, boolean>) {
+    setVisible(next);
+    try {
+      window.sessionStorage.setItem(storageKey, JSON.stringify(next));
+    } catch {
+      // Visibility still works for the current page when browser storage is unavailable.
+    }
+  }
+  function fitLayer(layer: MapLayer) {
+    if (!validBounds(layer.bounds)) {
+      setError("This layer does not have a valid map extent to zoom to.");
+      return;
+    }
+    setFit((previous) => ({ bounds: layer.bounds, revision: previous.revision + 1 }));
+  }
+  function resetView() {
+    const bounds = layers.map((layer) => layer.bounds).filter(validBounds);
+    setFit((previous) => ({
+      bounds: bounds.length ? [
+        Math.min(...bounds.map((item) => item[0])),
+        Math.min(...bounds.map((item) => item[1])),
+        Math.max(...bounds.map((item) => item[2])),
+        Math.max(...bounds.map((item) => item[3])),
+      ] : worldBounds,
+      revision: previous.revision + 1,
+    }));
+  }
   function chooseMode(next: MeasureMode) {
     setMode(next);
     setPoints([]);
@@ -148,7 +190,7 @@ export function GISViewer() {
     );
   }
   const base = basemaps.find((item) => item.id === basemapId) ?? basemaps[0];
-  const shown = layers.filter((layer) => visible[layer.id] !== false);
+  const shown = layers.filter((layer) => visible[layer.id] ?? layer.defaultVisible);
   const measurement =
     mode === "polygon"
       ? formatArea(polygonSquareMeters(points), areaUnit)
@@ -199,17 +241,7 @@ export function GISViewer() {
           <button
             type="button"
             className="gis-tool"
-            onClick={() =>
-              setFit((previous) => ({
-                bounds: layers.length ? [
-                  Math.min(...layers.map((layer) => layer.bounds[0])),
-                  Math.min(...layers.map((layer) => layer.bounds[1])),
-                  Math.max(...layers.map((layer) => layer.bounds[2])),
-                  Math.max(...layers.map((layer) => layer.bounds[3])),
-                ] : worldBounds,
-                revision: previous.revision + 1,
-              }))
-            }
+            onClick={resetView}
           >
             Reset view
           </button>
@@ -233,18 +265,14 @@ export function GISViewer() {
           <LayerPanel
             layers={layers}
             visible={visible}
-            onToggle={(id) =>
-              setVisible((previous) => ({
-                ...previous,
-                [id]: previous[id] === false,
-              }))
-            }
-            onFit={(layer) =>
-              setFit((previous) => ({
-                bounds: layer.bounds,
-                revision: previous.revision + 1,
-              }))
-            }
+            isAdmin={isAdmin}
+            loading={loading}
+            onToggle={(id) => {
+              const layer = layers.find((item) => item.id === id);
+              if (layer) changeVisibility({ ...visible, [id]: !(visible[id] ?? layer.defaultVisible) });
+            }}
+            onResetVisibility={() => changeVisibility({})}
+            onFit={fitLayer}
           />
           <MeasurementPanel
             mode={mode}

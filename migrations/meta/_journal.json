@@ -43,6 +43,13 @@
       "when": 1791364821736,
       "tag": "0005_vector_upload_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791487826571,
+      "tag": "0006_vector_styling_management",
+      "breakpoints": true
     }
   ]
 }

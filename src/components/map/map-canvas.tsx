@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as LibreMap, Marker } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import { geometryFamily } from "@/lib/gis/types";
+import { synchronizeVectorLayers, vectorLayerIds } from "@/lib/gis/map-style";
+import { isDisplayField, validBounds } from "@/lib/gis/style";
 import type {
   Basemap,
   Bounds,
@@ -27,62 +28,6 @@ type Props = {
   onError: (message: string) => void;
   onUnauthorized: () => void;
 };
-const sourceId = (id: string) => `gis-${id}`;
-function addLayer(map: LibreMap, layer: MapLayer) {
-  const id = sourceId(layer.id);
-  if (map.getSource(id)) return;
-  map.addSource(id, {
-    type: "vector",
-    tiles: [
-      `${window.location.origin}/api/layers/${layer.id}/tiles/{z}/{x}/{y}.pbf`,
-    ],
-    minzoom: 0,
-    maxzoom: 18,
-  });
-  const base = { id, source: id, "source-layer": "features" };
-  if (geometryFamily(layer.geometryType) === "Point")
-    map.addLayer(
-      {
-        ...base,
-        type: "circle",
-        paint: {
-          "circle-radius": layer.style.radius,
-          "circle-color": layer.style.color,
-          "circle-opacity": layer.style.opacity,
-          "circle-stroke-color": "#fff",
-          "circle-stroke-width": 2,
-        },
-      },
-      "measure-fill",
-    );
-  else if (geometryFamily(layer.geometryType) === "LineString")
-    map.addLayer(
-      {
-        ...base,
-        type: "line",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: {
-          "line-color": layer.style.color,
-          "line-width": layer.style.width,
-          "line-opacity": layer.style.opacity,
-        },
-      },
-      "measure-fill",
-    );
-  else
-    map.addLayer(
-      {
-        ...base,
-        type: "fill",
-        paint: {
-          "fill-color": layer.style.color,
-          "fill-opacity": layer.style.opacity,
-          "fill-outline-color": layer.style.color,
-        },
-      },
-      "measure-fill",
-    );
-}
 function popupContent(layer: MapLayer, properties: Record<string, unknown>) {
   const content = document.createElement("div");
   content.className = "gis-popup";
@@ -90,8 +35,7 @@ function popupContent(layer: MapLayer, properties: Record<string, unknown>) {
   title.textContent = layer.name;
   content.append(title);
   const list = document.createElement("dl");
-  const reserved = /^(?:_.*|geom(?:etry)?|wkb_geometry|ogc_fid|gid|fid|table_name|file_path|storage_metadata|uploaded_by|source_srid|source_crs_wkt|.*(?:password|secret|token|credential|connection_string))$/i;
-  for (const [key, value] of Object.entries(properties).filter(([key]) => !reserved.test(key)).slice(0, 30)) {
+  for (const [key, value] of Object.entries(properties).filter(([key]) => isDisplayField(key)).slice(0, 30)) {
     const name = document.createElement("dt"),
       item = document.createElement("dd");
     name.textContent = key;
@@ -127,7 +71,8 @@ export default function MapCanvas(props: Props) {
         container: container.current,
         center: [0, 0],
         zoom: 1,
-        maxZoom: 20,
+        // Match the validated style zoom range; sources overscale their last tile.
+        maxZoom: 24,
         style: {
           version: 8,
           sources: {},
@@ -205,17 +150,14 @@ export default function MapCanvas(props: Props) {
         return;
       }
       const ids = current.layers
-        .filter(
-          (layer) =>
-            current.visible[layer.id] !== false &&
-            map.getLayer(sourceId(layer.id)),
-        )
-        .map((layer) => sourceId(layer.id));
+        .filter((layer) => current.visible[layer.id] ?? layer.defaultVisible)
+        .flatMap((layer) => vectorLayerIds(layer.id))
+        .filter((id) => map.getLayer(id));
       if (!ids.length) return;
       const hit = map.queryRenderedFeatures(event.point, { layers: ids })[0];
       if (!hit) return;
       const layer = current.layers.find(
-        (layer) => sourceId(layer.id) === hit.layer.id,
+        (layer) => vectorLayerIds(layer.id).includes(hit.layer.id),
       );
       if (!layer) return;
       popup.current?.remove();
@@ -246,20 +188,7 @@ export default function MapCanvas(props: Props) {
     const map = instance.current;
     if (!ready || !map) return;
     popup.current?.remove();
-    const wanted = new Set(props.layers.map((layer) => sourceId(layer.id)));
-    for (const layer of map.getStyle().layers ?? [])
-      if (layer.id.startsWith("gis-") && !wanted.has(layer.id)) {
-        map.removeLayer(layer.id);
-        map.removeSource(layer.id);
-      }
-    for (const layer of props.layers) {
-      addLayer(map, layer);
-      map.setLayoutProperty(
-        sourceId(layer.id),
-        "visibility",
-        props.visible[layer.id] === false ? "none" : "visible",
-      );
-    }
+    synchronizeVectorLayers(map, props.layers, props.visible, window.location.origin);
   }, [ready, props.layers, props.visible]);
   useEffect(() => {
     const map = instance.current;
@@ -329,7 +258,7 @@ export default function MapCanvas(props: Props) {
     });
   }, [ready, props.mode, props.points]);
   useEffect(() => {
-    if (ready && props.fit)
+    if (ready && props.fit && validBounds(props.fit.bounds))
       instance.current?.fitBounds(
         [
           [props.fit.bounds[0], props.fit.bounds[1]],

@@ -315,6 +315,12 @@ async function run() {
         ),
       )
       .toBe(false);
+    if (process.argv.includes("--styling")) {
+      const { verifyVectorStyling } = await import("./verify-vector-styling.mjs");
+      await verifyVectorStyling({ page, context, contextFor, owner, baseUrl, layerId, privateDirectory,
+        administrator, participant, pending, rejected });
+      return;
+    }
     await page.screenshot({
       path: join(screenshots, "upload-ready.png"),
       fullPage: true,
@@ -492,9 +498,9 @@ async function run() {
       await unauthorized.close();
     }
 
-    await expect(row.getByRole("checkbox")).toBeChecked();
-    await row.getByRole("checkbox").click();
-    await expect(row.getByRole("checkbox")).not.toBeChecked();
+    await expect(row.getByRole("checkbox", { name: /^Visible to viewers:/ })).toBeChecked();
+    await row.getByRole("checkbox", { name: /^Visible to viewers:/ }).click();
+    await expect(row.getByRole("checkbox", { name: /^Visible to viewers:/ })).not.toBeChecked();
     await expect
       .poll(
         async () =>
@@ -523,9 +529,9 @@ async function run() {
     await expect(
       viewerPage.getByText("No GIS layers available.", { exact: true }),
     ).toBeVisible();
-    await expect(row.getByRole("checkbox")).toBeEnabled();
-    await row.getByRole("checkbox").click();
-    await expect(row.getByRole("checkbox")).toBeChecked();
+    await expect(row.getByRole("checkbox", { name: /^Visible to viewers:/ })).toBeEnabled();
+    await row.getByRole("checkbox", { name: /^Visible to viewers:/ }).click();
+    await expect(row.getByRole("checkbox", { name: /^Visible to viewers:/ })).toBeChecked();
     await expect
       .poll(
         async () =>

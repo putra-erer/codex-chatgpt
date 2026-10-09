@@ -31,10 +31,10 @@ export function adminFailure(error: unknown) {
   const status = error.code === "FORBIDDEN" ? 403 : error.code === "NOT_FOUND" ? 404
     : error.code === "UPLOAD_TOO_LARGE" ? 413 : error.code === "QUEUE_FULL" ? 429
     : ["DUPLICATE_NAME", "LAYER_BUSY", "NOT_MANAGED"].includes(error.code) ? 409
-    : ["STORAGE_ERROR", "GDAL_UNAVAILABLE", "DATABASE_UNAVAILABLE"].includes(error.code) ? 503 : 422;
+    : ["STORAGE_ERROR", "GDAL_UNAVAILABLE", "DATABASE_UNAVAILABLE", "ATTRIBUTE_QUERY_TIMEOUT"].includes(error.code) ? 503 : 422;
   return gisError(status, safe.code, safe.message);
 }
-export async function readMetadata(request: Request) {
+export async function readMetadata(request: Request, maxBytes = 16384) {
   if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") throw new GISProcessingError("INVALID_METADATA");
   const reader = request.body?.getReader();
   if (!reader) throw new GISProcessingError("INVALID_METADATA");
@@ -44,7 +44,7 @@ export async function readMetadata(request: Request) {
     while (true) {
       const { value, done } = await reader.read(); if (done) break;
       size += value.byteLength;
-      if (size > 16384) { await reader.cancel(); throw new GISProcessingError("INVALID_METADATA"); }
+      if (size > maxBytes) { await reader.cancel(); throw new GISProcessingError("INVALID_METADATA"); }
       chunks.push(value);
     }
     try { return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown; }

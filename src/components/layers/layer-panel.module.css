@@ -1,0 +1,34 @@
+.search { display: grid; gap: 7px; color: #536b7a; font-size: 11px; margin: 14px 0; }
+.search input { width: 100%; min-width: 0; font: inherit; font-size: 12px; color: #193745; padding: 10px; border: 1px solid #cfded6; border-radius: 6px; background: #fff; }
+.search input:focus-visible, .groupButton:focus-visible, .details summary:focus-visible, .reset:focus-visible { outline: 2px solid #2f6b45; outline-offset: 3px; }
+.topActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0; font-size: 11px; }
+.topActions a, .adminLinks a { color: #2f6b45; text-decoration: underline; text-underline-offset: 3px; }
+.reset { background: none; border: 0; padding: 0; font: inherit; color: #2f6b45; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.reset:disabled { opacity: .5; cursor: default; }
+.groups { display: grid; gap: 10px; }
+.group { border: 1px solid #e3eae5; border-radius: 8px; overflow: hidden; }
+.groupButton { display: flex; align-items: center; gap: 7px; width: 100%; padding: 10px; border: 0; background: #f5f7f3; color: #163a2b; font: inherit; font-size: 11px; font-weight: 600; text-align: left; cursor: pointer; }
+.groupName { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.count { font-size: 10px; color: #617166; white-space: nowrap; font-weight: 400; }
+.entry { padding: 0 9px; border-top: 1px solid #edf1ee; }
+.entry[data-visible="true"] { background: #fbfdfb; }
+.entry :global(.gis-layer-item) { border: 0; padding: 12px 0 8px; gap: 1px; }
+.entry :global(.gis-layer-item label) { gap: 4px; }
+.entry :global(.gis-layer-item input) { margin: 0 3px 0 0; }
+.entry :global(.gis-layer-item strong) { overflow-wrap: anywhere; }
+.entry :global(.gis-layer-item small) { line-height: 1.5; }
+.symbol { display: block; flex: 0 0 36px; }
+.details { padding: 0 0 12px 24px; font-size: 11px; color: #536b7a; }
+.details summary { cursor: pointer; color: #2f6b45; font-size: 10px; }
+.details p { margin: 10px 0; line-height: 1.6; overflow-wrap: anywhere; }
+.details dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; margin: 10px 0; font-size: 10px; }
+.details dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.details dt { color: #718176; }
+.adminLinks { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; font-size: 10px; }
+.legendList { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.legendList li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 11px; color: #536b7a; }
+.legendList li span { overflow-wrap: anywhere; }
+.legendLayers { list-style: none; padding: 0; margin: 0; display: grid; gap: 17px; }
+.legendTitle { display: block; font-size: 11px; color: #193745; overflow-wrap: anywhere; }
+.legendNote { display: block; font-size: 10px; color: #718176; margin-top: 4px; overflow-wrap: anywhere; }
+.notice { font-size: 11px; line-height: 1.6; color: #647769; margin: 12px 0 0; }

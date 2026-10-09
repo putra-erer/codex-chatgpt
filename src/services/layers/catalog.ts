@@ -4,13 +4,8 @@ import { z } from "zod";
 import { getDb } from "@/server/db";
 import { layers, type AppUser } from "@/server/db/schema";
 import type { Bounds, MapLayer } from "@/lib/gis/types";
+import { normalizeVectorStyle } from "@/lib/gis/style";
 
-const styleSchema = z.object({
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  opacity: z.number().min(0).max(1),
-  width: z.number().min(0.5).max(12),
-  radius: z.number().min(2).max(20),
-});
 type Actor = Pick<AppUser, "status" | "role">;
 export const vectorTileLimits = { candidates: 10_000, bytes: 2 * 1024 * 1024, timeoutMs: 5_000 } as const;
 export class VectorTileLimitError extends Error {
@@ -31,7 +26,7 @@ function access(actor: Actor) {
     actor.role === "ADMIN" ? undefined : eq(layers.isVisible, true),
   );
 }
-const fields = {
+export const mapLayerFields = {
   id: layers.id,
   name: layers.name,
   description: layers.description,
@@ -39,38 +34,45 @@ const fields = {
   featureCount: layers.featureCount,
   style: layers.styleJson,
   isVisible: layers.isVisible,
+  defaultVisible: layers.defaultVisible,
+  groupName: layers.groupName,
+  sortOrder: layers.sortOrder,
+  updatedAt: layers.updatedAt,
   bounds: sql<Bounds>`json_build_array(ST_XMin(${layers.bbox}::box3d), ST_YMin(${layers.bbox}::box3d), ST_XMax(${layers.bbox}::box3d), ST_YMax(${layers.bbox}::box3d))`,
 };
-function dto(row: Record<string, unknown>): MapLayer {
+export function mapLayerDto(row: Record<string, unknown>): MapLayer {
+  const geometryType = z.enum(["Point", "MultiPoint", "LineString", "MultiLineString", "Polygon", "MultiPolygon"]).parse(row.geometryType);
   return {
     id: row.id as string,
     name: row.name as string,
     description: row.description as string,
-    geometryType: z
-      .enum(["Point", "MultiPoint", "LineString", "MultiLineString", "Polygon", "MultiPolygon"])
-      .parse(row.geometryType),
+    geometryType,
     featureCount: Number(row.featureCount ?? 0),
     bounds: row.bounds as Bounds,
-    style: styleSchema.parse(row.style),
+    style: normalizeVectorStyle(row.style, geometryType),
     isVisible: Boolean(row.isVisible),
+    defaultVisible: Boolean(row.defaultVisible),
+    groupName: typeof row.groupName === "string" ? row.groupName : null,
+    sortOrder: Number(row.sortOrder),
+    updatedAt: (row.updatedAt as Date).toISOString(),
   };
 }
 export async function listLayers(actor: Actor) {
   const rows = await getDb()
-    .select(fields)
+    .select(mapLayerFields)
     .from(layers)
     .where(access(actor))
-    .orderBy(asc(layers.createdAt), asc(layers.id));
-  return rows.map(dto);
+    .orderBy(asc(layers.sortOrder), asc(layers.createdAt), asc(layers.id));
+  return rows.map(mapLayerDto);
 }
 export async function getLayer(actor: Actor, id: string) {
   if (!z.uuid().safeParse(id).success) return null;
   const [row] = await getDb()
-    .select(fields)
+    .select(mapLayerFields)
     .from(layers)
     .where(and(access(actor), eq(layers.id, id)))
     .limit(1);
-  return row ? dto(row) : null;
+  return row ? mapLayerDto(row) : null;
 }
 export async function getVectorTile(
   actor: Actor,

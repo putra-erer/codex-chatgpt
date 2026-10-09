@@ -1,8 +1,8 @@
-# Company GIS Portal — Phase 4
+# Company GIS Portal — Phase 6
 
 Portal internal dengan login Google, persetujuan akun, dan akses berdasarkan role. Phase 1 mencakup Next.js + TypeScript, Tailwind CSS, PostgreSQL + PostGIS, Drizzle ORM/migration, Docker Compose, serta authentication dan authorization di server.
 
-Phase 2 **GIS Viewer** tersedia di `/map` menggunakan MapLibre GL JS, vector tile PostGIS, panel layer/basemap/legenda, popup atribut, dan pengukuran. Phase 3 menyediakan dashboard, approval akun, status online/offline, serta `/admin/users` untuk approve, reject, perubahan role, filter dan pencarian. **Phase 4** menambahkan upload ZIP Shapefile, worker import PostGIS, serta pengelolaan nama/deskripsi, visibility dan penghapusan layer melalui `/admin/layers`. Tidak ada seed GIS contoh. Raster/GeoTIFF dan fase berikutnya belum diimplementasikan. Cakupan fondasi mengikuti instruksi Phase 1 pengguna; penomoran awal di [PLAN.md](PLAN.md) memisahkan authentication menjadi fase tersendiri.
+Phase 2 **GIS Viewer** tersedia di `/map` menggunakan MapLibre GL JS, vector tile PostGIS, panel layer/basemap/legenda, popup atribut, dan pengukuran. Phase 3 menyediakan dashboard, approval akun, status online/offline, serta `/admin/users` untuk approve, reject, perubahan role, filter dan pencarian. **Phase 4** menambahkan upload ZIP Shapefile, worker import PostGIS, serta pengelolaan nama/deskripsi, visibility dan penghapusan layer melalui `/admin/layers`. **Phase 6** menambahkan editor style vector, kategori atribut, label, legenda dinamis, urutan, grup dan default visibility menggunakan layer yang sudah diunggah. **Phase 5 raster sengaja ditunda**; tidak ada implementasi GeoTIFF, raster tile, S3/MinIO/object storage atau Phase 7. Tidak ada seed GIS contoh. Cakupan dan penomoran terbaru pengguna dicatat di [PLAN.md](PLAN.md).
 
 ## Menjalankan development
 
@@ -465,7 +465,7 @@ Daftar admin diperbarui setiap 10 detik pada tab aktif; katalog peta diperbarui 
 
 Default ZIP **50 MiB**, ekstraksi total **250 MiB**, satu entry **200 MiB**, maksimal **32 entry** termasuk folder, dan rasio kompresi per entry maksimal **100:1**. Ukuran hasil dekompresi dan CRC diperiksa saat streaming, bukan hanya mempercayai header ZIP. Arsip terenkripsi, rusak, multipart yang tidak sesuai, file tambahan yang tidak dikenal dan upload melewati batas ditolak dengan pesan aman. Ada satu stream upload aktif per admin, maksimal dua job aktif per admin dan sepuluh job aktif total untuk penerimaan upload baru.
 
-Default dataset maksimal **500000 fitur** dan timeout proses **300 detik**; sesuaikan variabel `.env` hanya setelah mengukur kapasitas mesin. Endpoint MVT membatasi satu tile pada **10000 kandidat fitur**, output **2 MiB**, dan query database **5 detik**. Batas kepadatan/ukuran menghasilkan HTTP **422** (`TILE_TOO_DENSE`/`TILE_TOO_LARGE`), sedangkan query yang melewati timeout menghasilkan HTTP **503** (`TILE_TIMEOUT`); fitur tidak dipotong diam-diam menjadi hasil parsial. Perbesar peta untuk mempersempit area tile, atau kurangi kompleksitas/atribut dataset jika ukuran tetap berlebih. Semua fitur tetap disimpan di database. Belum ada clustering, generalisasi, feature search baru, styling editor, atau pipeline raster.
+Default dataset maksimal **500000 fitur** dan timeout proses **300 detik**; sesuaikan variabel `.env` hanya setelah mengukur kapasitas mesin. Endpoint MVT membatasi satu tile pada **10000 kandidat fitur**, output **2 MiB**, dan query database **5 detik**. Batas kepadatan/ukuran menghasilkan HTTP **422** (`TILE_TOO_DENSE`/`TILE_TOO_LARGE`), sedangkan query yang melewati timeout menghasilkan HTTP **503** (`TILE_TIMEOUT`); fitur tidak dipotong diam-diam menjadi hasil parsial. Perbesar peta untuk mempersempit area tile, atau kurangi kompleksitas/atribut dataset jika ukuran tetap berlebih. Semua fitur tetap disimpan di database. Belum ada clustering, generalisasi, feature search baru atau pipeline raster. Editor style vector ditambahkan pada Phase 6 di bawah.
 
 Worker memproses satu job pada satu waktu per proses, dengan claim atomik, lease **90 detik**, heartbeat **20 detik**, dan pemeriksaan recovery sekitar **30 detik**. Kegagalan koneksi/lock database sementara dicoba ulang maksimal tiga attempt; arsip/CRS/geometry yang tidak valid menjadi FAILED tanpa retry otomatis. Worker lama yang kehilangan lease tidak boleh mempublikasikan hasil. Recovery membersihkan staging/orphan dan mencoba ulang claim yang kedaluwarsa hingga batas attempt. Import FAILED tetap ada pada daftar admin untuk diperiksa/dihapus, tetapi tidak tampil pada peta. Perbaiki dataset lalu hapus entry gagal atau gunakan nama berbeda saat upload ulang. Delete yang gagal tetap tersembunyi dalam `DELETING` sampai pekerjaan cleanup diselesaikan.
 
@@ -542,4 +542,157 @@ Test menggunakan database/storage terisolasi dan fixture otomatis, tanpa membuat
 | Layer READY tetapi tidak terlihat / tile HTTP 422 atau 503 | Periksa global visibility, checkbox pribadi, tombol View on map/fit extent, dan perbesar zoom pada dataset padat. `TILE_TOO_DENSE`/`TILE_TOO_LARGE` memakai HTTP 422; query melewati 5 detik mengembalikan HTTP 503 `TILE_TIMEOUT`. |
 | Penghapusan gagal dan layer DELETING | Pulihkan koneksi/storage, lalu pilih **Check / retry delete** di Layers. Job aktif dipantau tanpa membuat duplikat; job yang sudah gagal dapat diantrekan ulang. Layer tetap tidak disajikan selama penghapusan. |
 
-Phase 4 berhenti pada upload/import Shapefile dan pengelolaan layer dasar. GeoTIFF/raster, GDAL raster, style editor lanjutan, GeoJSON upload, dan perubahan deployment di luar Compose development belum dikerjakan.
+Lingkup Phase 4 berhenti pada upload/import Shapefile dan pengelolaan layer dasar. Phase 6 berikut memperluas pengaturan tampilan vector dengan tetap memakai upload, worker, tabel geometry, tile, popup dan penghapusan yang sama.
+
+## Phase 6 — Vector styling dan pengelolaan layer
+
+### Upgrade database yang sudah berisi data
+
+Hentikan server development dengan `Ctrl+C`, tarik pembaruan yang sudah tersedia pada branch Anda, lalu jalankan dari repository:
+
+```bash
+npm ci
+npm run db:migrate
+npm run dev
+```
+
+PostgreSQL harus berjalan. Worker Phase 4 tetap diperlukan untuk upload dan delete, tetapi penyimpanan style, label, urutan dan grup langsung menggunakan database tanpa job import baru.
+
+Migration incremental `0006_vector_styling_management.sql` menambahkan `default_visible`, `group_name`, `sort_order`, index urutan serta constraint grup/urutan pada **tabel `app.layers` yang sudah ada**. Urutan awal mengikuti `created_at, id`; default visibility awal mengikuti `is_visible`. Migration tidak mereset database, tidak menghapus upload, user atau sesi, tidak mengubah geometry, dan tidak menulis ulang `style_json`. Style lama `{color, opacity, width, radius}` dibaca melalui normalisasi kompatibel; style kosong/tidak valid memakai fallback aman sesuai geometry. Format version 1 baru disimpan ketika admin memilih **Save Changes**.
+
+### Menggunakan Style Editor
+
+1. Login APPROVED ADMIN, buka **Administration → Layers**, lalu pilih **Edit Style** pada layer vector READY. Halamannya berada di `/admin/layers/<id>/style`; tombol juga tersedia pada detail layer di sidebar peta untuk admin.
+2. Pada **Single Symbol**, atur warna dan opacity. Polygon mempunyai fill serta outline dengan warna/lebar/opacity terpisah; opacity fill `0` membuat bagian dalam transparan. Line mempunyai lebar dan pilihan Solid/Dashed/Dotted. Point mempunyai radius lingkaran dan stroke dengan warna/lebar/opacity. Geometry Multi memakai pengaturan keluarga geometry yang sama.
+3. Peta **Live preview** dan legenda preview mengikuti perubahan langsung. Preview memakai data vector asli layer tersebut. Perubahan ini masih draft dan tidak mengubah tampilan pengguna lain.
+4. Klik **Save Changes** untuk memvalidasi dan menyimpan style ke database. Pesan sukses muncul setelah server menerima perubahan. Style yang tersimpan dibaca kembali setelah refresh, login berikutnya atau restart server selama database yang sama dipertahankan.
+5. **Cancel** mengembalikan draft ke style terakhir yang disimpan. **Reset to Default** hanya mengganti draft dengan default geometry; klik Save Changes bila ingin menerapkannya permanen.
+
+Pilihan **Categorized** menampilkan dropdown field dari atribut PostGIS layer tersebut. Pilih field, tunggu nilai kategori, lalu pilih warna setiap nilai dan **Other values color**. Nilai berupa string, angka dan boolean tetap dibedakan menurut tipenya; nilai null, field yang tidak ada atau nilai yang tidak terdaftar memakai warna fallback. String kosong dapat menjadi kategori tersendiri dengan label `(empty text)`. Kategori tidak dibuat dari data contoh dan nilainya tidak dapat dimasukkan sebagai expression bebas. Beralih kembali ke Single Symbol menghapus konfigurasi kategori dari draft.
+
+Picker memindai maksimal **10000 fitur**, mengembalikan maksimal **100 field** dan **50 kategori**, dengan timeout **3 detik per statement SQL**, termasuk waktu tunggu lock statement tersebut. Ini bukan batas durasi total transaksi yang dapat menjalankan beberapa statement. UI memberi tahu jika daftar berasal dari sampel terbatas atau kategori dipotong. Field yang hanya ada di luar sampel dapat tidak muncul; ini bukan inventarisasi penuh dataset. Field internal/sensitif, nilai array/object, nama field yang tidak layak, serta string kategori lebih dari 200 karakter tidak ditawarkan. Dataset besar tetap disajikan melalui MVT; editor tidak mengambil seluruh geometry untuk mengubah warna.
+
+### Label, zoom dan legenda
+
+Aktifkan **Enable labels**, pilih **Label field**, lalu atur ukuran font, warna, halo dan zoom label. Label menggunakan symbol layer MapLibre, placement/collision bawaan, dan teks atribut maksimum 120 karakter; tidak membuat elemen HTML untuk setiap fitur. Line memakai placement sepanjang garis, point diberi offset, dan polygon memakai placement titik MapLibre. Gunakan minimum zoom yang lebih tinggi pada dataset padat.
+
+MapLibre menggunakan glyph lokal dari font `sans-serif` tanpa layanan glyph eksternal. Bentuk font dan cakupan karakter mengikuti font yang tersedia di browser/sistem operasi. Jika tidak ada field scalar yang sesuai, editor menampilkan pesan dan tidak dapat mengaktifkan label/kategori baru.
+
+**Minimum zoom / Maximum zoom** mengatur layer, sedangkan zoom label dibatasi lagi oleh rentang label. Rentang yang dipakai label adalah irisan kedua rentang. Nilai zoom `0–24`; maksimum bersifat **eksklusif**, sehingga `[12, 18)` muncul mulai zoom 12 sampai sebelum 18. Minimum sama dengan maksimum membuat rentang tampil kosong; untuk menampilkan layer pilih maksimum lebih besar dari minimum. Tidak ada pengambilan seluruh dataset untuk pengaturan ini.
+
+Legenda berasal dari style aktif: fill/outline polygon, garis beserta dash, lingkaran/stroke point, opacity dan setiap warna kategori. Single Symbol menampilkan nama layer; Categorized menampilkan nilai kategori dan **Other / missing values**. Legenda mengikuti urutan layer. **Zoom to Layer** menggunakan bbox tervalidasi dari metadata PostGIS dan `fitBounds`; extent tidak valid menghasilkan pesan, tanpa koordinat layer yang di-hard-code.
+
+### Urutan, grup dan tiga pengaturan visibility
+
+Tabel **Layers** menampilkan geometry, grup, jumlah fitur, publication/default visibility, style type, urutan, waktu pembaruan, serta action yang sudah ada. **Up / Down** menyimpan urutan global: baris paling atas adalah layer paling atas di peta. Fill, outline dan label milik satu layer tetap bergerak bersama. Grup adalah metadata sederhana pada layer; grup tidak mengubah urutan gambar global.
+
+**Change group** menerima nama grup baru atau yang sudah ada; kosongkan untuk memindahkan ke Ungrouped. **Rename group** mengganti nama pada seluruh anggota. Menggunakan nama grup yang sudah ada menggabungkan anggotanya di sidebar. Grup maksimal 100 karakter, tanpa karakter kontrol. Penghapusan tetap memakai konfirmasi dan worker Phase 4.
+
+| Pengaturan | Yang boleh mengubah | Efek |
+| --- | --- | --- |
+| **Published / Unpublished** (`is_visible`) | APPROVED ADMIN | Publication global dari Phase 4. Unpublished tidak diberikan oleh katalog/tile kepada VIEWER; admin tetap dapat preview. |
+| **On / Off by default** (`default_visible`) | APPROVED ADMIN | Nilai awal checkbox pada peta. Published tetapi Off by default tetap dapat dinyalakan VIEWER. |
+| Checkbox layer di `/map` | Setiap pengguna APPROVED | Preferensi tampilan lokal; tidak mengubah publication atau default dalam database. |
+
+Preferensi lokal disimpan di **sessionStorage per akun dan tab**, bertahan saat refresh dalam sesi tab itu dan tidak dibagikan ke akun lain. Jika browser memblokir storage, toggle tetap bekerja selama halaman aktif. **Use default visibility** membuang override lokal dan membaca default global terbaru; perubahan default admin hanya berlaku otomatis pada layer yang belum memiliki override lokal. Preferensi browser tidak dapat membuka layer yang server sembunyikan.
+
+Sidebar tetap scrollable, mendukung **Search layers**, expand/collapse grup, detail/legenda per layer, checkbox serta Zoom to Layer. Search hanya menyaring daftar nama layer, bukan mencari fitur atau mengubah visibility peta. VIEWER tidak melihat tautan Edit Style/Edit Metadata/Layer Management dan tidak mempunyai izin API admin.
+
+Katalog diperiksa ulang sekitar **30 detik** ketika tab terlihat serta ketika tab kembali aktif. Karena itu style, grup, urutan dan publication yang disimpan admin dapat diterapkan pada viewer yang sudah terbuka tanpa reload penuh. Editor tidak menimpa draft yang belum disimpan dengan polling.
+
+### Format style dan mekanisme MapLibre
+
+Format JSON version 1 menggunakan schema bersama yang ketat. Contoh **konfigurasi** polygon berikut tidak membuat layer atau fitur GIS:
+
+```json
+{
+  "version": 1,
+  "type": "polygon",
+  "mode": "single",
+  "color": "#2F6B45",
+  "opacity": 0.4,
+  "width": 2,
+  "radius": 6,
+  "strokeColor": "#163A2B",
+  "strokeWidth": 1,
+  "strokeOpacity": 1,
+  "dash": "solid",
+  "category": null,
+  "label": {
+    "enabled": false,
+    "field": null,
+    "size": 12,
+    "color": "#163A2B",
+    "haloColor": "#FFFFFF",
+    "haloWidth": 1,
+    "minZoom": 12,
+    "maxZoom": 24
+  },
+  "minZoom": 0,
+  "maxZoom": 24
+}
+```
+
+`type` harus cocok dengan geometry (`polygon`, `line`, `point`); `color/opacity` mengatur fill polygon atau warna utama line/point. `width` dipakai line, `radius` dipakai point, dan `stroke*` dipakai outline polygon/stroke point. Semua property tetap ada agar bentuk JSON konsisten. Mode `categorized` mengganti `category: null` dengan `{field, categories: [{value, color}], otherColor}` yang merujuk atribut/nilai nyata layer; mode `single` mewajibkan `category: null`.
+
+Warna wajib hex enam digit, opacity `0–1`, lebar line `0.5–20`, radius point `1–40`, lebar outline/stroke `0–12`, ukuran label `8–48`, halo `0–8`, dan angka harus finite. Property tambahan, geometry salah, field tidak tersedia, kategori duplikat/tidak ditemukan, dan rentang zoom terbalik ditolak server. Expression MapLibre dibangun aplikasi dari konfigurasi tervalidasi; JavaScript, raw SQL, table name dan expression arbitrer bukan input yang diterima.
+
+`MapCanvas` yang sama dipakai viewer dan preview, dimuat melalui dynamic import dengan SSR dimatikan. `setPaintProperty`, `setLayoutProperty`, `setLayerZoomRange` dan `moveLayer` memperbarui layer yang sudah ada tanpa membuat ulang map atau source. URL/source MVT tetap sama saat warna atau urutan berubah; zoom/pan tetap dapat meminta tile yang memang diperlukan. Geometry dan batas bbox/fitur/ukuran tile Phase 4 tetap dipakai.
+
+### API, keamanan dan file Phase 6
+
+Semua endpoint berikut hanya untuk APPROVED ADMIN, termasuk pembacaan atribut/editor. PUT/POST/PATCH memakai Origin yang sah dan `x-gis-csrf` terikat sesi dari GET admin; privilege dan identitas Google actor diperiksa ulang di transaksi. Mutasi mencatat `LAYER_UPDATED` dalam audit yang sudah ada. Respons privat memakai `no-store`.
+
+| Endpoint | Fungsi / body |
+| --- | --- |
+| `GET /api/admin/layers/:id/style` | `{layer, csrfToken}` dengan style normalisasi. |
+| `PUT /api/admin/layers/:id/style` | Simpan `{style}` yang lolos schema, geometry dan pemeriksaan atribut. |
+| `GET /api/admin/layers/:id/attributes` | `{fields, sampled}` dari atribut scalar yang diizinkan. |
+| `GET /api/admin/layers/:id/attributes?field=...` | `{values, truncated, sampled}`; field di-URL-encode. |
+| `POST /api/admin/layers/order` | `{layerId, direction: "up" | "down"}`; urutan diperbarui atomik. |
+| `PATCH /api/admin/layers/:id/settings` | `{groupName: string | null, defaultVisible: boolean}`. |
+| `PATCH /api/admin/layers/groups` | `{from, to}` untuk rename/merge grup. |
+
+API metadata/publication/delete yang sudah ada tetap digunakan. Layer styling harus terdaftar sebagai vector terkelola, mempunyai geometry yang didukung, dan berstatus READY. Nama tabel diturunkan dari UUID internal yang cocok dengan registry; field atribut dipakai sebagai parameter JSONB, bukan SQL identifier dari client. Browser tidak menerima credential, nama tabel internal atau stack database.
+
+| File / lokasi | Perubahan |
+| --- | --- |
+| `src/lib/gis/style.ts`, `types.ts`, `admin.ts` | Schema/version/fallback, batas, kategori aman dan kontrak DTO. |
+| `src/lib/gis/map-style.ts`, `src/components/map/` | Sinkronisasi paint/layout/zoom/urutan, label, viewer dan preferensi lokal. |
+| `src/components/layers/` | Simbol/legenda, grup, pencarian, detail dan validasi state visibility. |
+| `src/components/admin/style-editor.tsx`, `style-editor.module.css` | Form geometry/kategori/label/zoom dan preview draft. |
+| `src/components/admin/layer-manager.tsx`, `layer-manager.module.css` | Urutan, grup, default visibility, pencarian dan tabel admin. |
+| `src/app/admin/layers/[id]/style/`, `src/app/api/admin/layers/` | Halaman editor dan endpoint admin di atas. |
+| `src/server/layers/styling.ts`, `src/services/layers/catalog.ts` | Validasi atribut PostGIS, transaksi/audit dan katalog terurut. |
+| `src/server/db/schema.ts`, `migrations/0006_vector_styling_management.sql`, `migrations/meta/` | Penambahan metadata aman pada tabel layer existing. |
+| `tests/vector-style.test.ts`, `tests/layer-visibility.test.ts`, `tests/integration/vector-styling.test.ts` | Schema, render specification, preferensi serta PostgreSQL/otorisasi. |
+| `scripts/verify-vector-styling.mjs`, `scripts/test-vector-browser.mjs`, `package.json` | Browser styling memakai ulang harness upload/worker terisolasi. |
+
+### Verifikasi dan uji manual Phase 6
+
+Verifikasi **9 Oktober 2026**: lint, TypeScript, **172 unit test**, **159 integration test** (termasuk 21 pengujian Phase 6), production build, migration dua kali, pemeriksaan Drizzle, serta ketiga suite browser **`test:styling`, `test:gis`, `test:vector` lulus**. Integration mencakup upgrade database Phase 4 berisi data tanpa mengubah style lama, geometry atau authentication. Runtime memakai PostgreSQL/PostGIS, GDAL dan Chromium nyata dengan database/storage sementara. Laporan matriks fitur, bukti pengujian dan batas verifikasi tersedia di [PHASE 6 VERIFICATION REPORT](docs/PHASE6_VERIFICATION.md). Google OAuth nyata, data perusahaan, beban maksimum dan deployment produksi belum diverifikasi dalam pengujian ini.
+
+Untuk mengulang, siapkan PostgreSQL/PostGIS, GDAL/Python, Chromium dan credential development yang dijelaskan sebelumnya:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run test:integration
+npm run test:gis
+npm run test:styling
+```
+
+`test:styling` memakai `scripts/test-vector-browser.mjs --styling`: database/storage sementara, production build, worker GDAL, sesi uji terisolasi dan fixture Shapefile Phase 4. Fixture tidak dimasukkan ke database aplikasi; tidak ada bypass login production. Mode ini memakai ulang harness existing untuk upload, styling/pengelolaan layer dan delete. `test:vector` dijalankan terpisah untuk regresi Phase 4, termasuk popup atribut serta edit metadata existing.
+
+Uji penerimaan pada data perusahaan:
+
+1. Upload atau gunakan layer polygon, line, point yang sah. Ubah property sesuai geometry, periksa preview, Cancel dan Reset, lalu Save Changes. Refresh, logout/login dan restart server menggunakan database yang sama; style harus tetap tersimpan.
+2. Pilih Categorized dari atribut nyata, ubah warna kategori/fallback, simpan, lalu cocokkan fitur dan legenda. Periksa pesan sampling pada dataset besar.
+3. Pilih field label yang sesuai, ubah ukuran/warna/halo, uji enable/disable serta batas zoom layer/label. Periksa teks non-ASCII dan area padat pada browser pengguna.
+4. Ubah urutan, assign/rename grup, cari layer, collapse/expand grup dan Zoom to Layer. Periksa outline/label tetap bersama geometry saat urutan berubah.
+5. Dengan akun VIEWER pada profil terpisah, ubah checkbox dan refresh; perubahan lokal tidak boleh mengubah default admin atau akun lain. Uji Published/Unpublished, On/Off by default serta Use default visibility.
+6. Coba halaman/API admin sebagai VIEWER/PENDING/REJECTED dan tanpa login. Uji ulang Google OAuth, approval, upload, popup dan delete dengan konfirmasi pada data uji milik Anda.
+
+Phase 6 tidak menambahkan graduated classification, custom marker/icon, label HTML, geometry editing, pencarian fitur, raster, object storage atau Phase 7. ZIP sumber masih mengikuti cleanup Phase 4; menyimpan style tidak mengubah retensi upload. Pemakaian data perusahaan, kapasitas maksimum, Google OAuth nyata dan deployment tujuan memerlukan pengujian penerimaan tersendiri.

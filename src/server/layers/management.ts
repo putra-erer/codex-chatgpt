@@ -1,16 +1,18 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { and, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AdminLayer } from "@/lib/gis/admin";
 import { layerMetadataSchema, managedLayerMarker } from "@/lib/gis/admin";
+import type { Bounds, GeometryType } from "@/lib/gis/types";
+import { normalizeVectorStyle, validBounds } from "@/lib/gis/style";
 import { lockUserAdministration, type AuthTransaction } from "@/server/auth/service";
 import type { Database } from "@/server/db";
 import { accounts, auditLogs, gisJobs, layers, users } from "@/server/db/schema";
 import { GISProcessingError, publicGisError } from "@/server/processing/errors";
 import { assertUploadReady } from "@/server/storage/local";
 
-async function actorGuard(tx: AuthTransaction, actorId: string) {
+export async function actorGuard(tx: AuthTransaction, actorId: string) {
   await lockUserAdministration(tx);
   const [actor] = await tx.select({ id: users.id }).from(users).innerJoin(accounts, and(eq(accounts.userId, users.id), eq(accounts.provider, "google"), eq(accounts.providerAccountId, users.googleId)))
     .where(and(eq(users.id, actorId), eq(users.status, "APPROVED"), eq(users.role, "ADMIN"), isNotNull(users.emailVerified)));
@@ -19,7 +21,7 @@ async function actorGuard(tx: AuthTransaction, actorId: string) {
   await tx.execute(sql`select pg_advisory_xact_lock(73429102)`);
 }
 function id(value: string) { if (!z.uuid().safeParse(value).success) throw new GISProcessingError("INVALID_ID"); }
-function managed(row: typeof layers.$inferSelect) {
+export function managed(row: typeof layers.$inferSelect) {
   return row.layerType === "VECTOR" && row.sourceType === "SHP" && row.tableName === `layer_${row.id.replaceAll("-", "")}` && row.storageMetadata.managedBy === managedLayerMarker;
 }
 async function uniqueName(tx: AuthTransaction, name: string, except?: string) {
@@ -28,8 +30,11 @@ async function uniqueName(tx: AuthTransaction, name: string, except?: string) {
 }
 /** Caller must pass requireAdmin before exposing uploader details. */
 export async function listAdminLayers(db: Database): Promise<AdminLayer[]> {
-  const rows = await db.select({ layer: layers, uploaderName: users.name, uploaderEmail: users.email }).from(layers).leftJoin(users, eq(layers.uploadedBy, users.id)).orderBy(desc(layers.createdAt), desc(layers.id));
-  return rows.map(({ layer: row, uploaderName, uploaderEmail }) => ({ id: row.id, name: row.name, description: row.description, layerType: row.layerType, sourceType: row.sourceType, geometryType: row.geometryType, featureCount: row.featureCount, srid: row.srid, isVisible: row.isVisible, state: row.state, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), uploadedBy: uploaderEmail ? { name: uploaderName, email: uploaderEmail } : null, managed: managed(row) }));
+  const rows = await db.select({ layer: layers, uploaderName: users.name, uploaderEmail: users.email, bounds: sql<Bounds | null>`CASE WHEN ${layers.bbox} IS NULL THEN NULL ELSE json_build_array(ST_XMin(${layers.bbox}::box3d),ST_YMin(${layers.bbox}::box3d),ST_XMax(${layers.bbox}::box3d),ST_YMax(${layers.bbox}::box3d)) END` }).from(layers).leftJoin(users, eq(layers.uploadedBy, users.id)).orderBy(asc(layers.sortOrder), asc(layers.createdAt), asc(layers.id));
+  return rows.map(({ layer: row, uploaderName, uploaderEmail, bounds }) => ({ id: row.id, name: row.name, description: row.description, layerType: row.layerType, sourceType: row.sourceType, geometryType: row.geometryType, featureCount: row.featureCount, srid: row.srid, isVisible: row.isVisible, defaultVisible: row.defaultVisible, groupName: row.groupName, sortOrder: row.sortOrder, style: row.state === "READY" && supportedGeometry(row.geometryType) ? normalizeVectorStyle(row.styleJson, row.geometryType) : null, bounds: validBounds(bounds) ? bounds : null, state: row.state, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), uploadedBy: uploaderEmail ? { name: uploaderName, email: uploaderEmail } : null, managed: managed(row) }));
+}
+export function supportedGeometry(value: string | null): value is GeometryType {
+  return value !== null && ["Point", "MultiPoint", "LineString", "MultiLineString", "Polygon", "MultiPolygon"].includes(value);
 }
 export async function checkUploadCapacity(db: Database, actorId: string) {
   const rows = await db.select({ actorId: gisJobs.actorId, total: count() }).from(gisJobs).where(inArray(gisJobs.status, ["QUEUED", "RUNNING"])).groupBy(gisJobs.actorId);

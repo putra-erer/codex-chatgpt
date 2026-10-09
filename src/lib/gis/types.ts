@@ -1,3 +1,5 @@
+import type { VectorStyle } from "@/lib/gis/style";
+
 export type Bounds = [number, number, number, number];
 export type GeometryType = "Point" | "MultiPoint" | "LineString" | "MultiLineString" | "Polygon" | "MultiPolygon";
 export function geometryFamily(type: GeometryType): "Point" | "LineString" | "Polygon" {
@@ -5,12 +7,7 @@ export function geometryFamily(type: GeometryType): "Point" | "LineString" | "Po
   if (type === "LineString" || type === "MultiLineString") return "LineString";
   return "Polygon";
 }
-export type LayerStyle = {
-  color: string;
-  opacity: number;
-  width: number;
-  radius: number;
-};
+export type LayerStyle = VectorStyle;
 export type MapLayer = {
   id: string;
   name: string;
@@ -20,6 +17,10 @@ export type MapLayer = {
   bounds: Bounds;
   style: LayerStyle;
   isVisible: boolean;
+  groupName: string | null;
+  sortOrder: number;
+  defaultVisible: boolean;
+  updatedAt: string;
 };
 export type Basemap = {
   id: string;
